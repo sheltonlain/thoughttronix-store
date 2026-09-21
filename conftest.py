@@ -48,6 +48,18 @@ def product(category):
 
 
 @pytest.fixture
+def featured_product(category):
+    return Product.objects.create(
+        name="Cortex Crown",
+        slug="cortex-crown",
+        tagline="Wear your thoughts on your head.",
+        price=Decimal("899.00"),
+        is_featured=True,
+        category=category,
+    )
+
+
+@pytest.fixture
 def unavailable_product(category):
     return Product.objects.create(
         name="EchoPatch",
