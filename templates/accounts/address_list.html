@@ -31,18 +31,18 @@
               {{ address.city }}, {{ address.state }} {{ address.zip }}
             </address>
             <div class="card-actions mt-2 flex-wrap items-center">
-              <a href="{% url 'accounts:address_edit' address.pk %}" class="btn btn-ghost btn-xs">Edit</a>
-              <a href="{% url 'accounts:address_delete' address.pk %}" class="btn btn-ghost btn-xs text-error">Delete</a>
+              <a href="{% url 'accounts:address_edit' address.pk %}" class="btn btn-outline btn-xs">Edit</a>
+              <a href="{% url 'accounts:address_delete' address.pk %}" class="btn btn-outline btn-xs text-error">Delete</a>
               {% if address.pk != user.default_shipping_address_id %}
                 <form method="post" action="{% url 'accounts:address_default_shipping' address.pk %}">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-ghost btn-xs">Set as default shipping</button>
+                  <button type="submit" class="btn btn-outline btn-xs">Set as default shipping</button>
                 </form>
               {% endif %}
               {% if address.pk != user.default_billing_address_id %}
                 <form method="post" action="{% url 'accounts:address_default_billing' address.pk %}">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-ghost btn-xs">Set as default billing</button>
+                  <button type="submit" class="btn btn-outline btn-xs">Set as default billing</button>
                 </form>
               {% endif %}
             </div>
