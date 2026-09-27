@@ -28,6 +28,60 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-09-26 — Saved addresses: manual test plan, shipping, and checkout nicknames (cont.)
+
+Continues the session logged in the entry below, after that entry's log
+had already been written.
+
+### Prompts
+
+1. "How do I verify this feature manually in the browser?"
+2. "commit these changes"
+3. "merge it into main"
+4. "push it and delete the branch"
+5. "When adding a new address in checkout, I'd like there to be an option
+   to add a nickname to the address at that time"
+6. "commit and push it"
+7. "update PROMPTS.md with this session"
+
+### Summary
+
+- **Outcome:**
+  - **Manual test plan:** a browser walkthrough in four parts (returning
+    customer, brand-new customer, cross-customer 404s, admin), each step
+    with an expected result.
+  - **Saved-addresses feature shipped:** committed as `19c2763` on a
+    `saved-addresses` branch, fast-forwarded into `main`, pushed to
+    `origin/main`, and the branch deleted.
+  - **Checkout nicknames:** ticking "Save to my address book" now reveals
+    an optional **Nickname (optional)** field for that section. Two new
+    optional `CheckoutForm` fields, `save_shipping_label` and
+    `save_billing_label` (`max_length=50`, matching `Address.label`), live
+    in a new `_save_to_book.html` partial. It shows and hides with
+    Tailwind's `group-has-[:checked]:block`, which is CSS `:has()` with no
+    JavaScript, and stays visible whenever the field has an error.
+    `Address.objects.save_from_checkout` reads the nickname from checkout
+    data, so `place_order` only needed a docstring change. 239 passed
+    (+9), ruff clean, Tailwind force-rebuilt. Committed as `99be4df`
+    through the same branch, fast-forward, push and delete sequence.
+- **Deviations:**
+  - The nickname request reverses grill-me Q9, where labels were kept
+    off checkout. That decision was made to avoid a *required* label's
+    conditional validation. An *optional* nickname avoids it, so I
+    implemented it without re-asking and explained the difference.
+  - One behavior I chose myself and flagged for the user: a nickname
+    typed for an address already in the book labels it only if it has
+    no label, and never renames one. No answer yet.
+  - For "commit these changes" I branched first rather than committing
+    straight to `main`, where the user's earlier commits went. The user
+    then asked for the merge and push, and I reused that flow for the
+    nickname commit.
+- **Sideways:** My first check that the new `group-has-[:checked]:block`
+  rule had compiled returned nothing, which looked like a build failure.
+  The grep pattern escaped the selector wrong. A looser search found
+  `.group-has-\[\:checked\]\:block` in `assets/css/tailwind.css`. This is
+  the same mistake as in the 2026-09-20 hot-pink entry.
+
 ## 2026-09-26 — Saved addresses: grilled design, then address book + checkout reuse
 
 ### Prompts
