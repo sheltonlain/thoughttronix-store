@@ -139,6 +139,39 @@ def test_save_from_checkout_matches_regardless_of_label(customer):
     assert saved == labeled
 
 
+def test_save_from_checkout_names_a_new_address(customer):
+    data = {**VALID_DATA, "save_shipping_label": "Studio"}
+
+    saved = Address.objects.save_from_checkout(customer, data, "shipping")
+
+    assert saved.label == "Studio"
+
+
+def test_save_from_checkout_names_an_unlabeled_match(customer):
+    first = Address.objects.save_from_checkout(customer, VALID_DATA, "shipping")
+    data = {**VALID_DATA, "save_shipping_label": "Studio"}
+
+    again = Address.objects.save_from_checkout(customer, data, "shipping")
+
+    assert again == first
+    first.refresh_from_db()
+    assert first.label == "Studio"
+
+
+def test_save_from_checkout_never_renames_a_labeled_match(customer):
+    Address.objects.save_from_checkout(
+        customer, {**VALID_DATA, "save_shipping_label": "Studio"}, "shipping"
+    )
+
+    again = Address.objects.save_from_checkout(
+        customer, {**VALID_DATA, "save_shipping_label": "Office"}, "shipping"
+    )
+
+    again.refresh_from_db()
+    assert again.label == "Studio"
+    assert Address.objects.count() == 1
+
+
 def test_save_from_checkout_fills_empty_defaults(customer):
     saved = Address.objects.save_from_checkout(customer, VALID_DATA, "shipping")
 

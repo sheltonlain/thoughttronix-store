@@ -66,6 +66,20 @@ class CheckoutForm(forms.Form):
     )
     save_shipping = forms.BooleanField(label="Save to my address book", required=False)
     save_billing = forms.BooleanField(label="Save to my address book", required=False)
+    # Optional, so they need no conditional validation; ignored unless the
+    # matching save box is ticked. Same max_length as ``Address.label``.
+    save_shipping_label = forms.CharField(
+        label="Nickname (optional)",
+        max_length=50,
+        required=False,
+        help_text="Like Home or Work, to find it in your address book.",
+    )
+    save_billing_label = forms.CharField(
+        label="Nickname (optional)",
+        max_length=50,
+        required=False,
+        help_text="Like Home or Work, to find it in your address book.",
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

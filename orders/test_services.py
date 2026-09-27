@@ -151,6 +151,24 @@ def test_save_shipping_saves_the_shipping_address(cart, cart_item, checkout_data
     assert saved.zip == "79015"
 
 
+def test_saved_addresses_take_their_nicknames(cart, cart_item, checkout_data):
+    checkout_data["save_shipping_label"] = "Studio"
+    checkout_data["save_billing_label"] = "Accounts payable"
+
+    place_order(cart, cart.user, checkout_data, save_shipping=True, save_billing=True)
+
+    labels = set(Address.objects.values_list("label", flat=True))
+    assert labels == {"Studio", "Accounts payable"}
+
+
+def test_a_nickname_without_save_ticked_saves_nothing(cart, cart_item, checkout_data):
+    checkout_data["save_shipping_label"] = "Studio"
+
+    place_order(cart, cart.user, checkout_data)
+
+    assert not Address.objects.exists()
+
+
 def test_save_billing_saves_the_billing_address(cart, cart_item, checkout_data):
     place_order(cart, cart.user, checkout_data, save_billing=True)
 

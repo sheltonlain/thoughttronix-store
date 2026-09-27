@@ -86,11 +86,19 @@ class AddressManager(models.Manager.from_queryset(AddressQuerySet)):
         ``data`` is checkout ``cleaned_data``; ``prefix`` is "shipping" or
         "billing". An identical address already in the book is reused
         rather than duplicated. Either way, it fills any empty default.
+
+        The optional ``save_<prefix>_label`` nickname names a new address,
+        or an existing one that has no label yet — it never renames one
+        the customer already labeled.
         """
         parts = {part: data[f"{prefix}_{part}"] for part in Address.PARTS}
+        label = data.get(f"save_{prefix}_label", "")
         address = self.filter(user=user, **parts).first()
         if address is None:
-            address = self.create(user=user, **parts)
+            address = self.create(user=user, label=label, **parts)
+        elif label and not address.label:
+            address.label = label
+            address.save(update_fields=["label"])
         user.fill_empty_defaults(address)
         return address
 

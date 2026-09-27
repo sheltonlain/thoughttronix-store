@@ -27,7 +27,7 @@
           <div class="space-y-4">
             {% include "orders/partials/_saved_address_picker.html" with section="shipping" selected=shipping_selected %}
             {% include "orders/partials/_address_fields.html" with section="shipping" fields=form.shipping_fields %}
-            {% include "orders/partials/_field.html" with field=form.save_shipping %}
+            {% include "orders/partials/_save_to_book.html" with save_field=form.save_shipping label_field=form.save_shipping_label %}
           </div>
         </div>
       </section>

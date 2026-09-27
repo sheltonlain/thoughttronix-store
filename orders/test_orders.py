@@ -203,6 +203,26 @@ def test_checking_out_with_save_ticked_saves_the_address(client, customer, cart_
     assert customer.default_shipping_address == saved
 
 
+def test_checkout_offers_a_nickname_beside_each_save_box(client, customer, cart_item):
+    client.force_login(customer)
+
+    page = client.get(reverse("orders:checkout")).content.decode()
+
+    assert 'name="save_shipping_label"' in page
+    assert 'name="save_billing_label"' in page
+
+
+def test_checking_out_with_a_nickname_labels_the_address(client, customer, cart_item):
+    client.force_login(customer)
+
+    client.post(
+        reverse("orders:checkout"),
+        {**VALID_DATA, "save_shipping": "on", "save_shipping_label": "Studio"},
+    )
+
+    assert Address.objects.get().label == "Studio"
+
+
 def test_checking_out_with_same_as_shipping(client, customer, cart_item):
     data = {
         name: value

@@ -111,6 +111,21 @@ def test_the_option_checkboxes_are_optional_and_off_when_absent():
     assert form.cleaned_data["use_shipping_for_billing"] is False
 
 
+def test_the_nickname_is_optional_and_kept():
+    form = form_with(save_shipping="on", save_shipping_label="Studio")
+
+    assert form.is_valid()
+    assert form.cleaned_data["save_shipping_label"] == "Studio"
+    assert form.cleaned_data["save_billing_label"] == ""
+
+
+def test_the_nickname_fits_the_address_label():
+    form = form_with(save_shipping_label="x" * 51)
+
+    assert not form.is_valid()
+    assert "save_shipping_label" in form.errors
+
+
 def test_the_option_checkboxes_stay_out_of_the_address_sections():
     names = [bound.name for bound in CheckoutForm().billing_fields()]
 

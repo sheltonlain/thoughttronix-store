@@ -52,7 +52,8 @@ def place_order(
 
     ``save_shipping`` and ``save_billing`` also save that address section
     to the user's address book (skipping one that's already there, and
-    filling any empty default address).
+    filling any empty default address), named by the optional
+    ``save_shipping_label`` / ``save_billing_label`` nickname.
 
     All-or-nothing: runs in a transaction, so a failure partway through
     leaves no partial order, no saved address, and the cart intact.

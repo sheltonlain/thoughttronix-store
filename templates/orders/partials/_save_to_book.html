@@ -1,0 +1,7 @@
+{# "Save to my address book" plus its nickname, which shows only while the box is ticked (CSS :has, no JS). #}
+<div class="group space-y-2">
+  {% include "orders/partials/_field.html" with field=save_field %}
+  <div class="{% if label_field.errors %}block{% else %}hidden{% endif %} group-has-[:checked]:block">
+    {% include "orders/partials/_field.html" with field=label_field %}
+  </div>
+</div>
