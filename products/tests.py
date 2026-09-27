@@ -8,6 +8,7 @@ from django.db import IntegrityError
 from django.urls import reverse
 from django.utils.html import escape
 
+from accounts.models import Address
 from orders.models import CartItem, Order, OrderItem
 
 from .models import Category, Product, Tag
@@ -238,6 +239,12 @@ def test_seed_builds_the_demo_world(db):
     assert not customer.is_staff
     assert customer.cart.item_count() == 4
     assert customer.orders.count() == 4
+    assert [a.label for a in customer.addresses.order_by("pk")] == ["Home", "Work"]
+    home = customer.addresses.get(label="Home")
+    assert customer.default_shipping_address == home
+    assert customer.default_billing_address == home
+    shipped_to = set(customer.orders.values_list("shipping_street", flat=True))
+    assert shipped_to == {home.street}
 
     mark_one = Product.objects.get(slug="soulsear-mark-i")
     assert not mark_one.is_available
@@ -259,6 +266,7 @@ def test_seed_is_idempotent(db):
         CartItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
+        Address.objects.count(),
     )
 
     call_command("seed")
@@ -270,6 +278,7 @@ def test_seed_is_idempotent(db):
         CartItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
+        Address.objects.count(),
     )
 
     assert first == second

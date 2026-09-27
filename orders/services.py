@@ -11,6 +11,8 @@ from typing import Any
 from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 
+from accounts.models import Address
+
 from .models import Cart, Order, OrderItem
 
 ADDRESS_FIELDS = [
@@ -36,6 +38,8 @@ def place_order(
     user: AbstractBaseUser,
     checkout_data: Mapping[str, Any],
     *,
+    save_shipping: bool = False,
+    save_billing: bool = False,
     coupon_code: str | None = None,
 ) -> Order:
     """Create an order from the cart's contents, then empty the cart.
@@ -46,8 +50,12 @@ def place_order(
     only the last four digits are stored; the full number and CVV never
     touch the database.
 
+    ``save_shipping`` and ``save_billing`` also save that address section
+    to the user's address book (skipping one that's already there, and
+    filling any empty default address).
+
     All-or-nothing: runs in a transaction, so a failure partway through
-    leaves no partial order and the cart intact.
+    leaves no partial order, no saved address, and the cart intact.
 
     Raises ``ValueError`` if the cart is empty or holds a product that is
     no longer available.
@@ -77,5 +85,9 @@ def place_order(
             unit_price=line.product.price,
             quantity=line.quantity,
         )
+    if save_shipping:
+        Address.objects.save_from_checkout(user, checkout_data, "shipping")
+    if save_billing:
+        Address.objects.save_from_checkout(user, checkout_data, "billing")
     cart.items.all().delete()
     return order

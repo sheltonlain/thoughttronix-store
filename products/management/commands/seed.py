@@ -8,7 +8,8 @@ Demo logins (documented in the README):
 
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
-    customer / customer123  a plain customer, with order history and a live cart
+    customer / customer123  a plain customer, with order history, a live cart,
+                            and two saved addresses
 """
 
 import random
@@ -21,6 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+from accounts.models import Address
 from orders.models import Cart, Order, OrderItem
 from products.models import Category, Product, Tag
 
@@ -480,6 +482,13 @@ CUSTOMER_ORDERS = [
     (2, Order.Status.PLACED, [("veil", 1)]),
 ]
 
+# The customer demo login's address book: (label, street, line2, city,
+# state, zip). "Home" is both defaults and where their orders shipped.
+CUSTOMER_ADDRESSES = [
+    ("Home", "214 Synapse Street", "", "Canyon", "TX", "79015"),
+    ("Work", "1 Neural Plaza", "Suite 400", "Amarillo", "TX", "79101"),
+]
+
 # Background orders spread across the trailing six months so the Phase 7
 # dashboard has a real time axis. 48 here + 4 above = 52 total.
 BACKGROUND_ORDER_COUNT = 48
@@ -507,6 +516,7 @@ class Command(BaseCommand):
         self._create_catalog(tags)
         self._create_users()
         self._create_customer_cart()
+        self._create_customer_addresses()
         self._create_orders()
 
         self.stdout.write(
@@ -586,6 +596,28 @@ class Command(BaseCommand):
         for slug, quantity in CUSTOMER_CART:
             cart.items.create(product=Product.objects.get(slug=slug), quantity=quantity)
 
+    def _create_customer_addresses(self):
+        customer = get_user_model().objects.get(username="customer")
+        addresses = [
+            Address.objects.create(
+                user=customer,
+                label=label,
+                name=f"{customer.first_name} {customer.last_name}",
+                street=street,
+                line2=line2,
+                city=city,
+                state=state,
+                zip=zip_code,
+            )
+            for label, street, line2, city, state, zip_code in CUSTOMER_ADDRESSES
+        ]
+        home = addresses[0]
+        customer.default_shipping_address = home
+        customer.default_billing_address = home
+        customer.save(
+            update_fields=["default_shipping_address", "default_billing_address"]
+        )
+
     def _create_orders(self):
         """Order history: 4 visible orders for 'customer', 48 background.
 
@@ -599,9 +631,11 @@ class Command(BaseCommand):
         User = get_user_model()
 
         customer = User.objects.get(username="customer")
+        home = customer.default_shipping_address
         for days_ago, status, lines in CUSTOMER_ORDERS:
             self._build_order(
                 user=customer,
+                address=(home.street, home.city, home.state, home.zip),
                 created_at=now - timedelta(days=days_ago, hours=rng.randint(1, 12)),
                 status=status,
                 lines=[
@@ -644,9 +678,15 @@ class Command(BaseCommand):
                 rng=rng,
             )
 
-    def _build_order(self, *, user, created_at, status, lines, rng):
-        """One order with denormalized addresses and purchase-time prices."""
-        street, city, state, zip_code = rng.choice(SEED_ADDRESSES)
+    def _build_order(self, *, user, created_at, status, lines, rng, address=None):
+        """One order with denormalized addresses and purchase-time prices.
+
+        Without an explicit ``address``, one is drawn from SEED_ADDRESSES.
+        The draw happens either way, so the RNG sequence — and with it the
+        rest of the demo world — is the same whether or not one is given.
+        """
+        drawn = rng.choice(SEED_ADDRESSES)
+        street, city, state, zip_code = address or drawn
         name = f"{user.first_name} {user.last_name}"
         order = Order.objects.create(
             user=user,

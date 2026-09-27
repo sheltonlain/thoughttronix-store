@@ -9,6 +9,8 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
 
+from accounts.models import Address
+
 from .models import CartItem, Order
 from .services import place_order
 from .test_checkout_form import VALID_DATA
@@ -136,6 +138,175 @@ def test_confirmation_shows_the_order_number(client, customer, order):
 
     assert response.status_code == HTTPStatus.OK
     assert order.number in response.content.decode()
+
+
+# --- Checkout and the address book -------------------------------------------
+
+
+def test_checkout_fills_in_the_default_addresses(client, customer, cart_item, address):
+    customer.fill_empty_defaults(address)
+    client.force_login(customer)
+
+    response = client.get(reverse("orders:checkout"))
+
+    form = response.context["form"]
+    assert form["shipping_street"].value() == "214 Synapse Street"
+    assert form["billing_zip"].value() == "79015"
+    assert response.context["shipping_selected"] == address.pk
+
+
+def test_checkout_offers_saved_addresses(client, customer, cart_item, address):
+    client.force_login(customer)
+
+    page = client.get(reverse("orders:checkout")).content.decode()
+
+    assert "Use a saved address" in page
+    assert str(address) in page
+
+
+def test_checkout_hides_the_picker_with_an_empty_book(client, customer, cart_item):
+    client.force_login(customer)
+
+    page = client.get(reverse("orders:checkout")).content.decode()
+
+    assert "Use a saved address" not in page
+
+
+def test_save_boxes_start_ticked_only_with_an_empty_book(client, customer, cart_item):
+    client.force_login(customer)
+
+    empty = client.get(reverse("orders:checkout")).context["form"]
+    assert empty["save_shipping"].value() is True
+
+    Address.objects.create(
+        user=customer,
+        name="Casey Monroe",
+        street="1 Neural Plaza",
+        city="Amarillo",
+        state="TX",
+        zip="79101",
+    )
+    filled = client.get(reverse("orders:checkout")).context["form"]
+    assert filled["save_shipping"].value() is False
+    assert filled["save_billing"].value() is False
+
+
+def test_checking_out_with_save_ticked_saves_the_address(client, customer, cart_item):
+    client.force_login(customer)
+
+    client.post(reverse("orders:checkout"), {**VALID_DATA, "save_shipping": "on"})
+
+    saved = Address.objects.get()
+    assert saved.user == customer
+    assert saved.street == "12 Cortex Lane"
+    customer.refresh_from_db()
+    assert customer.default_shipping_address == saved
+
+
+def test_checking_out_with_same_as_shipping(client, customer, cart_item):
+    data = {
+        name: value
+        for name, value in VALID_DATA.items()
+        if not name.startswith("billing_")
+    }
+    client.force_login(customer)
+
+    client.post(reverse("orders:checkout"), {**data, "use_shipping_for_billing": "on"})
+
+    order = Order.objects.get()
+    assert order.billing_street == order.shipping_street == "12 Cortex Lane"
+    assert order.billing_zip == order.shipping_zip == "79015"
+
+
+def test_the_address_picker_fills_a_section(client, customer, address):
+    client.force_login(customer)
+
+    response = client.get(
+        reverse("orders:checkout_address_fields", kwargs={"section": "billing"}),
+        {"saved_address": address.pk},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    page = response.content.decode()
+    assert 'id="billing-fields"' in page
+    assert 'value="214 Synapse Street"' in page
+    assert "<html" not in page  # a partial, never base.html
+
+
+def test_the_address_picker_can_blank_a_section(client, customer, address):
+    client.force_login(customer)
+
+    response = client.get(
+        reverse("orders:checkout_address_fields", kwargs={"section": "shipping"}),
+        {"saved_address": ""},
+    )
+
+    page = response.content.decode()
+    assert 'id="shipping-fields"' in page
+    assert "214 Synapse Street" not in page
+
+
+@pytest.mark.parametrize(
+    ("section", "saved_address"),
+    [("shipping", "abc"), ("payment", "")],
+)
+def test_the_address_picker_rejects_bad_input(client, customer, section, saved_address):
+    client.force_login(customer)
+
+    response = client.get(
+        reverse("orders:checkout_address_fields", kwargs={"section": section}),
+        {"saved_address": saved_address},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_the_address_picker_never_loads_anothers_address(
+    client, customer, other_users_address
+):
+    client.force_login(customer)
+
+    response = client.get(
+        reverse("orders:checkout_address_fields", kwargs={"section": "shipping"}),
+        {"saved_address": other_users_address.pk},
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_the_address_picker_requires_login(client, address):
+    response = client.get(
+        reverse("orders:checkout_address_fields", kwargs={"section": "shipping"}),
+        {"saved_address": address.pk},
+    )
+
+    assert response.status_code == HTTPStatus.FOUND
+
+
+def test_ticking_same_as_shipping_collapses_billing(client, customer):
+    client.force_login(customer)
+
+    response = client.get(
+        reverse("orders:checkout_billing_section"),
+        {"use_shipping_for_billing": "on"},
+    )
+
+    page = response.content.decode()
+    assert 'id="billing-body"' in page
+    assert "bill the shipping address above" in page
+    assert 'name="billing_street"' not in page
+
+
+def test_unticking_same_as_shipping_restores_billing(client, customer, address):
+    customer.fill_empty_defaults(address)
+    client.force_login(customer)
+
+    response = client.get(reverse("orders:checkout_billing_section"))
+
+    page = response.content.decode()
+    assert 'name="billing_street"' in page
+    assert 'value="214 Synapse Street"' in page
+    assert 'name="save_billing"' in page
 
 
 # --- Order history and detail ------------------------------------------------

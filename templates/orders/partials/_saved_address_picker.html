@@ -1,0 +1,22 @@
+{# "Use a saved address" dropdown for one checkout section; hidden when the book is empty. #}
+{% if saved_addresses %}
+  <div>
+    <div class="mb-1 flex items-center justify-between gap-2">
+      <label class="label" for="saved-{{ section }}">Use a saved address</label>
+      <a href="{% url 'accounts:addresses' %}" class="link link-hover text-sm opacity-70">
+        Manage addresses
+      </a>
+    </div>
+    <select id="saved-{{ section }}" name="saved_address" class="select w-full"
+            hx-get="{% url 'orders:checkout_address_fields' section %}"
+            hx-target="#{{ section }}-fields"
+            hx-swap="outerHTML">
+      <option value="">Enter a new address</option>
+      {% for address in saved_addresses %}
+        <option value="{{ address.pk }}" {% if address.pk == selected %}selected{% endif %}>
+          {{ address }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+{% endif %}

@@ -1,0 +1,6 @@
+{# One checkout address section's fields. Swapped whole by the saved-address picker. #}
+<div id="{{ section }}-fields" class="grid gap-4 sm:grid-cols-2">
+  {% for field in fields %}
+    {% include "orders/partials/_field.html" %}
+  {% endfor %}
+</div>

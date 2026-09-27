@@ -1,13 +1,14 @@
 """place_order tests — coverage priority 3 in the PRD.
 
-Denormalization, cart emptying, atomicity, unavailable rejection, and
-the card_last4-only rule.
+Denormalization, cart emptying, atomicity, unavailable rejection, the
+card_last4-only rule, and saving addresses to the address book.
 """
 
 from decimal import Decimal
 
 import pytest
 
+from accounts.models import Address
 from products.models import Product
 
 from .models import CartItem, Order, OrderItem
@@ -128,3 +129,70 @@ def test_the_coupon_seam_is_accepted_and_ignored(cart, cart_item, checkout_data)
     order = place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS10")
 
     assert order.total == Decimal("699.98")
+
+
+# --- Saving to the address book ----------------------------------------------
+
+
+def test_nothing_is_saved_to_the_address_book_by_default(
+    cart, cart_item, checkout_data
+):
+    place_order(cart, cart.user, checkout_data)
+
+    assert not Address.objects.exists()
+
+
+def test_save_shipping_saves_the_shipping_address(cart, cart_item, checkout_data):
+    place_order(cart, cart.user, checkout_data, save_shipping=True)
+
+    saved = Address.objects.get()
+    assert saved.user == cart.user
+    assert saved.street == "12 Cortex Lane"
+    assert saved.zip == "79015"
+
+
+def test_save_billing_saves_the_billing_address(cart, cart_item, checkout_data):
+    place_order(cart, cart.user, checkout_data, save_billing=True)
+
+    assert Address.objects.get().zip == "79015-1234"
+
+
+def test_saving_both_when_identical_saves_one_address(cart, cart_item, checkout_data):
+    for part in Address.PARTS:
+        checkout_data[f"billing_{part}"] = checkout_data[f"shipping_{part}"]
+
+    place_order(cart, cart.user, checkout_data, save_shipping=True, save_billing=True)
+
+    assert Address.objects.count() == 1
+
+
+def test_the_first_saved_address_becomes_the_default(cart, cart_item, checkout_data):
+    place_order(cart, cart.user, checkout_data, save_shipping=True)
+
+    user = cart.user
+    user.refresh_from_db()
+    assert user.default_shipping_address == Address.objects.get()
+
+
+def test_a_rejected_order_saves_no_address(cart, checkout_data):
+    with pytest.raises(ValueError):
+        place_order(cart, cart.user, checkout_data, save_shipping=True)
+
+    assert not Address.objects.exists()
+
+
+def test_a_failed_address_save_places_no_order(
+    cart, cart_item, checkout_data, monkeypatch
+):
+    """All-or-nothing covers the address book too."""
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(Address.objects, "save_from_checkout", explode)
+
+    with pytest.raises(RuntimeError):
+        place_order(cart, cart.user, checkout_data, save_shipping=True)
+
+    assert not Order.objects.exists()
+    assert CartItem.objects.count() == 1

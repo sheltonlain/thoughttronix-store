@@ -5,71 +5,22 @@ annotations: field types validate (``EmailField``), field arguments
 validate (``required``, ``max_length``, ``ChoiceField``), and the
 ``validators=[...]`` list carries the rest. No ``clean_*`` methods
 and no ``clean()`` — none of its current rules need imperative validation.
+
+"Same as shipping" keeps that true: rather than making the billing fields
+conditionally required, the form copies the shipping values into the
+billing fields before validating, so the billing rules check a real
+address either way.
 """
 
 from django import forms
 from django.core.validators import RegexValidator
 
+from accounts.models import Address
+from accounts.validators import US_STATES, zip_validator
+
 from .models import Order
 from .validators import validate_card_number, validate_expiry
 
-US_STATES = [
-    ("AL", "Alabama"),
-    ("AK", "Alaska"),
-    ("AZ", "Arizona"),
-    ("AR", "Arkansas"),
-    ("CA", "California"),
-    ("CO", "Colorado"),
-    ("CT", "Connecticut"),
-    ("DE", "Delaware"),
-    ("DC", "District of Columbia"),
-    ("FL", "Florida"),
-    ("GA", "Georgia"),
-    ("HI", "Hawaii"),
-    ("ID", "Idaho"),
-    ("IL", "Illinois"),
-    ("IN", "Indiana"),
-    ("IA", "Iowa"),
-    ("KS", "Kansas"),
-    ("KY", "Kentucky"),
-    ("LA", "Louisiana"),
-    ("ME", "Maine"),
-    ("MD", "Maryland"),
-    ("MA", "Massachusetts"),
-    ("MI", "Michigan"),
-    ("MN", "Minnesota"),
-    ("MS", "Mississippi"),
-    ("MO", "Missouri"),
-    ("MT", "Montana"),
-    ("NE", "Nebraska"),
-    ("NV", "Nevada"),
-    ("NH", "New Hampshire"),
-    ("NJ", "New Jersey"),
-    ("NM", "New Mexico"),
-    ("NY", "New York"),
-    ("NC", "North Carolina"),
-    ("ND", "North Dakota"),
-    ("OH", "Ohio"),
-    ("OK", "Oklahoma"),
-    ("OR", "Oregon"),
-    ("PA", "Pennsylvania"),
-    ("RI", "Rhode Island"),
-    ("SC", "South Carolina"),
-    ("SD", "South Dakota"),
-    ("TN", "Tennessee"),
-    ("TX", "Texas"),
-    ("UT", "Utah"),
-    ("VT", "Vermont"),
-    ("VA", "Virginia"),
-    ("WA", "Washington"),
-    ("WV", "West Virginia"),
-    ("WI", "Wisconsin"),
-    ("WY", "Wyoming"),
-]
-
-zip_validator = RegexValidator(
-    r"^\d{5}(-\d{4})?$", "Enter a ZIP code like 79016 or 79016-1234."
-)
 cvv_validator = RegexValidator(r"^\d{3,4}$", "Enter the 3- or 4-digit CVV.")
 
 
@@ -108,22 +59,62 @@ class CheckoutForm(forms.Form):
     )
     card_cvv = forms.CharField(label="CVV", max_length=4, validators=[cvv_validator])
 
+    # Address-book options. Their names deliberately avoid the
+    # ``shipping_``/``billing_`` prefixes the field groups below match on.
+    use_shipping_for_billing = forms.BooleanField(
+        label="Same as shipping address", required=False
+    )
+    save_shipping = forms.BooleanField(label="Save to my address book", required=False)
+    save_billing = forms.BooleanField(label="Save to my address book", required=False)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             widget = field.widget
-            if isinstance(widget, forms.Select):
+            if isinstance(widget, forms.CheckboxInput):
+                widget.attrs["class"] = "checkbox checkbox-sm"
+            elif isinstance(widget, forms.Select):
                 widget.attrs["class"] = "select w-full"
             else:
                 widget.attrs["class"] = "input w-full"
+        if self.is_bound and self._billing_mirrors_shipping():
+            data = self.data.copy()
+            for part in Address.PARTS:
+                data[f"billing_{part}"] = data.get(f"shipping_{part}", "")
+            self.data = data
+
+    def _billing_mirrors_shipping(self):
+        name = "use_shipping_for_billing"
+        widget = self.fields[name].widget
+        return widget.value_from_datadict(self.data, self.files, self.add_prefix(name))
+
+    @classmethod
+    def initial_for(cls, user):
+        """Starting values for ``user``: their default addresses, and the
+        save checkboxes ticked only while their address book is empty."""
+        initial = {}
+        if user.default_shipping_address:
+            initial.update(
+                user.default_shipping_address.as_checkout_initial("shipping")
+            )
+        if user.default_billing_address:
+            initial.update(user.default_billing_address.as_checkout_initial("billing"))
+        book_is_empty = not user.addresses.exists()
+        initial["save_shipping"] = book_is_empty
+        initial["save_billing"] = book_is_empty
+        return initial
 
     # Field groups for the template — the form owns its own structure.
 
+    def address_fields(self, section):
+        """One address section's fields; ``section`` is shipping or billing."""
+        return [self[name] for name in self.fields if name.startswith(f"{section}_")]
+
     def shipping_fields(self):
-        return [self[name] for name in self.fields if name.startswith("shipping_")]
+        return self.address_fields("shipping")
 
     def billing_fields(self):
-        return [self[name] for name in self.fields if name.startswith("billing_")]
+        return self.address_fields("billing")
 
     def card_fields(self):
         return [self[name] for name in self.fields if name.startswith("card_")]

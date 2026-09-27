@@ -1,0 +1,10 @@
+{# The billing card's body — swapped whole when "Same as shipping address" toggles. #}
+<div id="billing-body" class="space-y-4">
+  {% if same_as_shipping %}
+    <p class="text-sm opacity-70">We'll bill the shipping address above.</p>
+  {% else %}
+    {% include "orders/partials/_saved_address_picker.html" with section="billing" selected=billing_selected %}
+    {% include "orders/partials/_address_fields.html" with section="billing" fields=form.billing_fields %}
+    {% include "orders/partials/_field.html" with field=form.save_billing %}
+  {% endif %}
+</div>

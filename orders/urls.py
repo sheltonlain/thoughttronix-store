@@ -23,6 +23,16 @@ urlpatterns = [
         name="remove",
     ),
     path("checkout/", views.CheckoutView.as_view(), name="checkout"),
+    path(
+        "checkout/address-fields/<str:section>/",
+        views.CheckoutAddressFieldsView.as_view(),
+        name="checkout_address_fields",
+    ),
+    path(
+        "checkout/billing-section/",
+        views.CheckoutBillingSectionView.as_view(),
+        name="checkout_billing_section",
+    ),
     path("orders/", views.OrderHistoryView.as_view(), name="history"),
     path("orders/<int:pk>/", views.OrderDetailView.as_view(), name="detail"),
     path(

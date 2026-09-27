@@ -4,17 +4,21 @@ The three HTMX interactions of the core live here: add-to-cart, quantity
 change, and line removal. Each renders a partial (never ``base.html``);
 the responses carry the navbar badge as an out-of-band swap via the
 ``oob_badge`` context flag. Checkout is conventional full-page work:
-validate the form, hand everything to ``place_order``.
+validate the form, hand everything to ``place_order``. Its two HTMX
+helpers only fill in the form from the address book — what's submitted
+is always plain form fields.
 """
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import DetailView, FormView, ListView, TemplateView
 
 from accounts.mixins import StaffRequiredMixin
+from accounts.models import Address
 from products.models import Product
 
 from .forms import CheckoutForm, OrderStatusForm
@@ -116,16 +120,80 @@ class CheckoutView(LoginRequiredMixin, FormView):
             return redirect("orders:cart")
         return super().dispatch(request, *args, **kwargs)
 
+    def get_initial(self):
+        return {**super().get_initial(), **CheckoutForm.initial_for(self.request.user)}
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["cart"] = Cart.for_user(self.request.user)
+        user = self.request.user
+        context["cart"] = Cart.for_user(user)
+        context["saved_addresses"] = Address.objects.address_book(user)
+        # Preselect the defaults only on a fresh page; a re-rendered POST
+        # shows whatever the customer had typed instead.
+        if not context["form"].is_bound:
+            context["shipping_selected"] = user.default_shipping_address_id
+            context["billing_selected"] = user.default_billing_address_id
         return context
 
     def form_valid(self, form):
         cart = Cart.for_user(self.request.user)
-        order = place_order(cart, self.request.user, form.cleaned_data)
+        order = place_order(
+            cart,
+            self.request.user,
+            form.cleaned_data,
+            save_shipping=form.cleaned_data["save_shipping"],
+            save_billing=form.cleaned_data["save_billing"],
+        )
         messages.success(self.request, f"Order {order.number} placed. Thank you!")
         return redirect(reverse("orders:confirmation", kwargs={"pk": order.pk}))
+
+
+class CheckoutAddressFieldsView(LoginRequiredMixin, View):
+    """HTMX: one checkout address section, filled from a saved address.
+
+    ``?saved_address=<pk>`` picks the address; an empty value returns the
+    section blank ("Enter a new address"). Addresses are only ever looked
+    up through the customer's own book — anyone else's is a 404.
+    """
+
+    def get(self, request, section):
+        if section not in ("shipping", "billing"):
+            raise Http404
+        pk = request.GET.get("saved_address", "")
+        initial = {}
+        if pk:
+            if not pk.isdigit():
+                raise Http404
+            address = get_object_or_404(Address, pk=pk, user=request.user)
+            initial = address.as_checkout_initial(section)
+        form = CheckoutForm(initial=initial)
+        return render(
+            request,
+            "orders/partials/_address_fields.html",
+            {"section": section, "fields": form.address_fields(section)},
+        )
+
+
+class CheckoutBillingSectionView(LoginRequiredMixin, View):
+    """HTMX: the billing card's body, swapped when "same as shipping" toggles.
+
+    Ticked, billing collapses to a note (the form copies shipping into
+    billing on submit); unticked, the picker and fields come back, filled
+    from the default billing address.
+    """
+
+    def get(self, request):
+        user = request.user
+        return render(
+            request,
+            "orders/partials/_billing_body.html",
+            {
+                "form": CheckoutForm(initial=CheckoutForm.initial_for(user)),
+                "same_as_shipping": bool(request.GET.get("use_shipping_for_billing")),
+                "saved_addresses": Address.objects.address_book(user),
+                "billing_selected": user.default_billing_address_id,
+            },
+        )
 
 
 class OwnOrdersMixin(LoginRequiredMixin):

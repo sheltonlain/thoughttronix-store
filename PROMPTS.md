@@ -28,6 +28,99 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-09-26 — Saved addresses: grilled design, then address book + checkout reuse
+
+### Prompts
+
+1. `/grill-me` "Customers should be able to save shipping and billing
+   addresses to their account and reuse them at checkout." — the skill
+   interviews one decision at a time, beginner-level, with options and a
+   recommendation for each.
+2. Fifteen answers, one per question, each taking the recommended option:
+   - Q1 what a saved address is → **a**, one address book usable for either
+     purpose
+   - Q2 which app → **a**, `accounts/` (and move `US_STATES`/`zip_validator`
+     there)
+   - Q3 how addresses get saved → **c**, both an address book page and a
+     checkout checkbox
+   - Q4 who saves at checkout → **c**, `place_order` flags + an `Address`
+     manager method
+   - Q5 duplicates → **b**, skip exact matches
+   - Q6 picking at checkout → **b**, HTMX dropdown that fills in the fields
+   - Q7 defaults → **c**, two nullable FKs on `User`
+   - Q8 auto-default → **b**, fill empty defaults, never overwrite
+   - Q9 identifying addresses → **c**, optional label with fallback
+   - Q10 address book CRUD → **a**, full-page generic views like the back
+     office
+   - Q11 save checkbox initial state → **c**, ticked only when the book is
+     empty
+   - Q12 navigation → **a**, navbar "Addresses" link
+   - Q13 staff visibility → **b**, Django admin only
+   - Q14 seed → **b**, "Home" and "Work" for the demo customer
+   - Q15 tests → **b**, full coverage in files following the existing layout
+3. "You can add the 'billing same as shipping' checkbox as long as it works
+   with the code. Go ahead and add what we've talked about to PROMPTS.md,
+   but no need to write the other documentation at the moment. Implement
+   the changes we discussed."
+4. (Rejected my edit to `accounts/admin.py` and the `makemigrations` run.)
+   "Can you please explain that code more so I can consider implementing
+   it?"
+5. "go with option 1 and continue"
+
+### Summary
+
+- **Outcome:** Customers can save addresses and reuse them at checkout.
+  - **Model (`accounts/`):** `Address` (owner, optional `label`, the six
+    address parts, `created_at`), and `User.default_shipping_address` /
+    `default_billing_address` (nullable FKs, `SET_NULL`). Migration
+    `accounts/0002_user_addresses.py`, applied. `US_STATES` and
+    `zip_validator` moved to `accounts/validators.py`, so the address book
+    and checkout share one set of rules. Manager method
+    `Address.objects.save_from_checkout` reuses an identical address instead
+    of duplicating it. `User.fill_empty_defaults` fills an empty default
+    slot and never overwrites one. `address_book(user)` lists defaults
+    first, then newest.
+  - **Address book (`/accounts/addresses/`):** list with a designed empty
+    state, plus add, edit, delete (confirm page), and POST-only
+    set-default-shipping and set-default-billing. Every view goes through
+    `OwnAddressesMixin`, so another user's address is a 404. "Addresses"
+    link in the navbar.
+  - **Checkout:** a "Use a saved address" HTMX dropdown per section (hidden
+    when the book is empty) swaps in `_address_fields.html` already filled
+    in. The page starts filled from the defaults. "Save to my address book"
+    checkboxes start ticked only while the book is empty.
+    `place_order(..., save_shipping=, save_billing=)` saves addresses
+    inside its existing transaction.
+  - **"Same as shipping address"** (added in prompt 3, beyond the grilled
+    scope): an HTMX toggle swaps the billing card to a note. On submit,
+    `CheckoutForm.__init__` copies the shipping values into the billing
+    fields before validation, so the form still has no `clean()` and the
+    existing "no imperative validation" test still passes.
+  - **Admin:** `Address` is view-only in Django admin; the user page shows
+    the two defaults read-only.
+  - **Seed:** `customer` gets "Home" (both defaults) and "Work", and their
+    four orders now ship to Home. The RNG draw still happens, so the rest of
+    the demo world is unchanged.
+  - **Tests:** suite went from 167 to 230 passed, ruff clean. Tailwind was
+    rebuilt with `--force` and the new classes confirmed in the compiled
+    CSS.
+- **Deviations:** Every grill-me recommendation was taken as offered. The
+  user reversed my out-of-scope call on "billing same as shipping" and asked
+  for it, on condition it fit the code. They also asked to skip the
+  PRD/plan documents I offered. In prompt 4 they stopped an edit to ask what
+  it did. After the explanation (three options) they chose option 1, the
+  one I suggested.
+- **Sideways:**
+  - My first `AddressAdmin` made addresses fully read-only, including
+    delete. I then realized admin checks delete permission on cascaded rows,
+    so no customer with a saved address could have been deleted from admin.
+    My fix was rejected pending the explanation above, then approved.
+  - One multi-file test edit went through a bash heredoc and failed on a
+    quoting error. Nothing had been written, as `git status` confirmed, and
+    I redid the edits directly.
+  - The local database was migrated but not re-seeded. `seed` is
+    destructive, so that is left for the user to run.
+
 ## 2026-09-20 — Featured badge: theme accent replaced with literal hot pink (cont.)
 
 Continues the two entries below, each of which had already been logged.

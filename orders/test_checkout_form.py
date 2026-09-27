@@ -1,7 +1,8 @@
 """CheckoutForm tests — coverage priority 2 in the PRD.
 
 Each declarative rule rejects bad input with a field-specific error;
-a fully valid form passes. No database required.
+a fully valid form passes. No database required, except where the
+address book supplies initial values.
 """
 
 import pytest
@@ -71,3 +72,73 @@ def test_the_form_declares_no_imperative_validation():
     """The showcase contract: declarative rules only, per the PRD."""
     assert "clean" not in CheckoutForm.__dict__
     assert not any(name.startswith("clean_") for name in CheckoutForm.__dict__)
+
+
+# --- "Same as shipping" ------------------------------------------------------
+
+BILLING_BLANK = {name: "" for name in VALID_DATA if name.startswith("billing_")}
+
+
+def test_same_as_shipping_copies_shipping_into_billing():
+    form = form_with(**BILLING_BLANK, use_shipping_for_billing="on")
+
+    assert form.is_valid()
+    assert form.cleaned_data["billing_street"] == "12 Cortex Lane"
+    assert form.cleaned_data["billing_line2"] == "Unit 7"
+    assert form.cleaned_data["billing_zip"] == "79015"
+
+
+def test_same_as_shipping_still_validates_the_address():
+    form = form_with(**BILLING_BLANK, use_shipping_for_billing="on", shipping_zip="790")
+
+    assert not form.is_valid()
+    assert "shipping_zip" in form.errors
+
+
+def test_without_same_as_shipping_billing_is_required():
+    form = form_with(**BILLING_BLANK)
+
+    assert not form.is_valid()
+    assert form.errors["billing_street"] == ["This field is required."]
+
+
+def test_the_option_checkboxes_are_optional_and_off_when_absent():
+    form = form_with()
+
+    assert form.is_valid()
+    assert form.cleaned_data["save_shipping"] is False
+    assert form.cleaned_data["save_billing"] is False
+    assert form.cleaned_data["use_shipping_for_billing"] is False
+
+
+def test_the_option_checkboxes_stay_out_of_the_address_sections():
+    names = [bound.name for bound in CheckoutForm().billing_fields()]
+
+    assert names == [
+        "billing_name",
+        "billing_street",
+        "billing_line2",
+        "billing_city",
+        "billing_state",
+        "billing_zip",
+    ]
+
+
+# --- Initial values ----------------------------------------------------------
+
+
+def test_initial_for_a_new_customer_ticks_the_save_boxes(customer):
+    initial = CheckoutForm.initial_for(customer)
+
+    assert initial == {"save_shipping": True, "save_billing": True}
+
+
+def test_initial_for_fills_in_the_defaults(customer, address):
+    customer.fill_empty_defaults(address)
+
+    initial = CheckoutForm.initial_for(customer)
+
+    assert initial["shipping_street"] == "214 Synapse Street"
+    assert initial["billing_city"] == "Canyon"
+    assert initial["save_shipping"] is False
+    assert initial["save_billing"] is False
