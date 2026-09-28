@@ -40,11 +40,11 @@
           <button type="submit" name="coupon_code" value="" class="btn btn-ghost btn-xs">Remove</button>
         </div>
       {% else %}
-        <label class="label mb-1 text-sm" for="coupon-entry">Have a coupon code?</label>
+        <label class="label mb-1 text-sm font-semibold text-primary" for="coupon-entry">Have a coupon code?</label>
         <div class="join w-full">
           <input type="text" id="coupon-entry" name="coupon_code" autocomplete="off"
                  placeholder="Enter code" class="input join-item w-full">
-          <button type="submit" class="btn join-item">Apply</button>
+          <button type="submit" class="btn btn-primary join-item">Apply</button>
         </div>
         {% if coupon_error %}
           <p class="mt-1 text-sm text-error" role="alert">{{ coupon_error }}</p>
