@@ -18,6 +18,13 @@
           · <span class="font-semibold">${{ order.total|intcomma }}</span>
           · card ending {{ order.card_last4 }}
         </p>
+        {% if order.coupon_code %}
+          <p class="text-sm text-success">
+            ${{ order.subtotal|intcomma }} less
+            <span class="font-mono">{{ order.coupon_code }}</span>
+            (−${{ order.discount|intcomma }})
+          </p>
+        {% endif %}
         <p class="text-sm opacity-70">A confirmation will reach {{ order.email }} eventually.</p>
       </div>
     </div>

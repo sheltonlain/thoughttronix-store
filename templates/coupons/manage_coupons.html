@@ -1,0 +1,99 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Coupons — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+    <h2 class="text-xl font-semibold">
+      {{ page_obj.paginator.count }} coupon{{ page_obj.paginator.count|pluralize }}
+    </h2>
+    <a href="{% url 'coupons:manage_coupon_create' %}" class="btn btn-primary btn-sm">
+      New coupon
+    </a>
+  </div>
+  <div class="mb-4 flex flex-wrap items-center gap-2 text-sm">
+    <span class="opacity-60">Status:</span>
+    <a href="{% querystring status=None page=None %}"
+       class="badge {% if not active_status %}badge-primary{% else %}badge-ghost{% endif %}">
+      all current
+    </a>
+    {% for value, label in statuses %}
+      <a href="{% querystring status=value page=None %}"
+         class="badge {% if active_status == value %}badge-primary{% else %}badge-ghost{% endif %}">
+        {{ label }}
+      </a>
+    {% endfor %}
+  </div>
+
+  {% if coupons %}
+    <div class="overflow-x-auto rounded-box bg-base-100 shadow-md">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Status</th>
+            <th>Deal</th>
+            <th>Runs</th>
+            <th class="text-right">Uses</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for coupon in coupons %}
+            <tr>
+              <td>
+                <a href="{% url 'coupons:manage_coupon_update' coupon.pk %}"
+                   class="link-hover font-mono font-semibold">{{ coupon.code }}</a>
+              </td>
+              <td>{% include "coupons/partials/_status_badge.html" %}</td>
+              <td>{{ coupon.summary }}</td>
+              <td class="whitespace-nowrap text-sm">
+                {{ coupon.starts_at|date:"M j, Y" }} – {{ coupon.expires_at|date:"M j, Y" }}
+              </td>
+              <td class="text-right font-mono">
+                {{ coupon.use_count }} / {% if coupon.max_uses %}{{ coupon.max_uses }}{% else %}∞{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if is_paginated %}
+      <div class="mt-8 flex justify-center">
+        <div class="join">
+          {% if page_obj.has_previous %}
+            <a href="{% querystring page=page_obj.previous_page_number %}" class="btn join-item">«</a>
+          {% else %}
+            <button class="btn join-item btn-disabled">«</button>
+          {% endif %}
+          <button class="btn join-item pointer-events-none">
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+          </button>
+          {% if page_obj.has_next %}
+            <a href="{% querystring page=page_obj.next_page_number %}" class="btn join-item">»</a>
+          {% else %}
+            <button class="btn join-item btn-disabled">»</button>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="py-16 text-center">
+      {% if active_status %}
+        <p class="text-5xl">🎟️</p>
+        <p class="mt-4 text-xl font-semibold">No coupons with that status</p>
+        <p class="mt-2 opacity-70">Every promotion is somewhere else in its life.</p>
+        <a href="{% querystring status=None page=None %}" class="btn btn-primary btn-sm mt-6">
+          Show current coupons
+        </a>
+      {% else %}
+        <p class="text-5xl">🎟️</p>
+        <p class="mt-4 text-xl font-semibold">No coupons yet</p>
+        <p class="mt-2 opacity-70">Create your first promotion. Generosity is a feeling we can schedule.</p>
+        <a href="{% url 'coupons:manage_coupon_create' %}" class="btn btn-primary btn-sm mt-6">
+          New coupon
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

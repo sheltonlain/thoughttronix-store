@@ -6,14 +6,18 @@ validated checkout into an order, all-or-nothing. Callers never touch
 """
 
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import Any
 
 from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 
 from accounts.models import Address
+from coupons.models import Coupon
 
 from .models import Cart, Order, OrderItem
+
+ZERO = Decimal("0.00")
 
 ADDRESS_FIELDS = [
     "email",
@@ -55,11 +59,17 @@ def place_order(
     filling any empty default address), named by the optional
     ``save_shipping_label`` / ``save_billing_label`` nickname.
 
+    ``coupon_code`` (blank means none) is checked afresh here, whatever
+    the checkout preview showed: the coupon row is locked for the rest of
+    the transaction, so two orders can't both spend a coupon's last use.
+    Its discount is snapshotted onto the order and split across the lines.
+
     All-or-nothing: runs in a transaction, so a failure partway through
     leaves no partial order, no saved address, and the cart intact.
 
     Raises ``ValueError`` if the cart is empty or holds a product that is
-    no longer available.
+    no longer available, and ``CouponError`` (a ``ValueError`` carrying
+    the customer-facing reason) if the coupon can't be used.
     """
     lines = list(cart.lines())
     if not lines:
@@ -71,10 +81,19 @@ def place_order(
             "Remove them from the cart to check out."
         )
 
+    coupon = evaluation = None
+    if coupon_code and coupon_code.strip():
+        coupon = Coupon.objects.select_for_update().for_code(coupon_code)
+        evaluation = coupon.evaluate(cart, user)
+    discount = evaluation.discount if evaluation else ZERO
+
     card_digits = checkout_data["card_number"].replace(" ", "").replace("-", "")
     order = Order.objects.create(
         user=user,
-        total=cart.total(),
+        total=cart.total() - discount,
+        discount=discount,
+        coupon=coupon,
+        coupon_code=coupon.code if coupon else "",
         card_last4=card_digits[-4:],
         **{name: checkout_data[name] for name in ADDRESS_FIELDS},
     )
@@ -85,6 +104,7 @@ def place_order(
             product_name=line.product.name,
             unit_price=line.product.price,
             quantity=line.quantity,
+            discount=evaluation.line_discounts[line.product_id] if evaluation else ZERO,
         )
     if save_shipping:
         Address.objects.save_from_checkout(user, checkout_data, "shipping")

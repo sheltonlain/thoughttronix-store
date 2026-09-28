@@ -1,0 +1,29 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Delete coupon — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="card mx-auto max-w-lg bg-base-100 shadow-md">
+    <div class="card-body">
+      <h2 class="card-title">Delete <span class="font-mono">{{ coupon.code }}</span>?</h2>
+      {% if coupon.is_locked %}
+        <p class="opacity-70">
+          Customers have used this coupon, so it can't be deleted — its
+          usage count keeps its limits honest. Archive it instead.
+        </p>
+        <div class="mt-4 flex justify-end gap-2">
+          <a href="{% url 'coupons:manage_coupon_update' coupon.pk %}" class="btn btn-ghost">Back</a>
+        </div>
+      {% else %}
+        <p class="opacity-70">
+          Nobody has used this coupon yet, so deleting it leaves no trace.
+        </p>
+        <form method="post" class="mt-4 flex justify-end gap-2">
+          {% csrf_token %}
+          <a href="{% url 'coupons:manage_coupon_update' coupon.pk %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-error">Delete coupon</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% load humanize %}
+{# The checkout's order-summary card: lines, any coupon, the total, and the Apply box. #}
+{# Apply re-renders this whole card. An accepted code rides to "Place order" in a hidden #}
+{# input owned by the checkout form (form="checkout-form"), not by the Apply form. #}
+<div id="order-summary" class="card bg-base-100 shadow-md">
+  <div class="card-body">
+    <h2 class="card-title">Your order</h2>
+    <ul class="space-y-2">
+      {% for item in cart.lines %}
+        <li class="flex justify-between gap-4 text-sm">
+          <span>{{ item.quantity }} × {{ item.product.name }}</span>
+          <span class="whitespace-nowrap">${{ item.line_total|intcomma }}</span>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="divider my-2"></div>
+    {% if evaluation %}
+      <p class="flex justify-between text-sm">
+        <span>Subtotal</span>
+        <span>${{ subtotal|intcomma }}</span>
+      </p>
+      <p class="flex justify-between text-sm text-success">
+        <span>Coupon <span class="font-mono">{{ evaluation.coupon.code }}</span></span>
+        <span class="whitespace-nowrap">−${{ evaluation.discount|intcomma }}</span>
+      </p>
+    {% endif %}
+    <p class="flex justify-between font-semibold">
+      <span>Total</span>
+      <span class="text-primary">${{ total|intcomma }}</span>
+    </p>
+
+    <form hx-post="{% url 'orders:checkout_apply_coupon' %}"
+          hx-target="#order-summary"
+          hx-swap="outerHTML"
+          class="mt-2">
+      {% if evaluation %}
+        <input type="hidden" name="coupon_code" value="{{ evaluation.coupon.code }}" form="checkout-form">
+        <div class="flex items-center justify-between gap-2 text-sm">
+          <span>✓ <span class="font-mono">{{ evaluation.coupon.code }}</span> applied</span>
+          <button type="submit" name="coupon_code" value="" class="btn btn-ghost btn-xs">Remove</button>
+        </div>
+      {% else %}
+        <label class="label mb-1 text-sm" for="coupon-entry">Have a coupon code?</label>
+        <div class="join w-full">
+          <input type="text" id="coupon-entry" name="coupon_code" autocomplete="off"
+                 placeholder="Enter code" class="input join-item w-full">
+          <button type="submit" class="btn join-item">Apply</button>
+        </div>
+        {% if coupon_error %}
+          <p class="mt-1 text-sm text-error" role="alert">{{ coupon_error }}</p>
+        {% endif %}
+      {% endif %}
+    </form>
+
+    <a href="{% url 'orders:cart' %}" class="link link-hover text-sm opacity-70">
+      Edit cart
+    </a>
+  </div>
+</div>
+{% if oob_total %}
+  <span id="place-order-total" hx-swap-oob="true">${{ total|intcomma }}</span>
+{% endif %}

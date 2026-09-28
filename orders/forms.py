@@ -80,6 +80,10 @@ class CheckoutForm(forms.Form):
         required=False,
         help_text="Like Home or Work, to find it in your address book.",
     )
+    # The code the Apply button accepted, carried to "Place order". No
+    # rules here: a code is only good against a cart and a moment, so
+    # ``place_order`` judges it, and the view shows its verdict.
+    coupon_code = forms.CharField(required=False, widget=forms.HiddenInput)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -4,9 +4,9 @@ The three HTMX interactions of the core live here: add-to-cart, quantity
 change, and line removal. Each renders a partial (never ``base.html``);
 the responses carry the navbar badge as an out-of-band swap via the
 ``oob_badge`` context flag. Checkout is conventional full-page work:
-validate the form, hand everything to ``place_order``. Its two HTMX
-helpers only fill in the form from the address book — what's submitted
-is always plain form fields.
+validate the form, hand everything to ``place_order``. Its HTMX helpers
+fill in the form from the address book and re-price the order summary
+with a coupon — what's submitted is always plain form fields.
 """
 
 from django.contrib import messages
@@ -19,6 +19,7 @@ from django.views.generic import DetailView, FormView, ListView, TemplateView
 
 from accounts.mixins import StaffRequiredMixin
 from accounts.models import Address
+from coupons.models import Coupon, CouponError
 from products.models import Product
 
 from .forms import CheckoutForm, OrderStatusForm
@@ -89,6 +90,25 @@ class RemoveCartItemView(CartItemActionView):
         item.delete()
 
 
+def order_summary(cart, user, code):
+    """Context for the checkout's order-summary card, priced with ``code``.
+
+    A code that can't be used leaves the price alone and explains why in
+    ``coupon_error`` — the card always renders, never an error page.
+    """
+    subtotal = cart.total()
+    context = {"cart": cart, "subtotal": subtotal, "total": subtotal}
+    if code.strip():
+        try:
+            evaluation = Coupon.objects.for_code(code).evaluate(cart, user)
+        except CouponError as error:
+            context["coupon_error"] = str(error)
+        else:
+            context["evaluation"] = evaluation
+            context["total"] = evaluation.total
+    return context
+
+
 class CheckoutView(LoginRequiredMixin, FormView):
     """The single checkout page: validate the form, hand off to the service.
 
@@ -126,26 +146,58 @@ class CheckoutView(LoginRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context["cart"] = Cart.for_user(user)
+        form = context["form"]
+        code = (form["coupon_code"].value() or "") if form.is_bound else ""
+        context.update(order_summary(Cart.for_user(user), user, code))
         context["saved_addresses"] = Address.objects.address_book(user)
         # Preselect the defaults only on a fresh page; a re-rendered POST
         # shows whatever the customer had typed instead.
-        if not context["form"].is_bound:
+        if not form.is_bound:
             context["shipping_selected"] = user.default_shipping_address_id
             context["billing_selected"] = user.default_billing_address_id
         return context
 
     def form_valid(self, form):
         cart = Cart.for_user(self.request.user)
-        order = place_order(
-            cart,
-            self.request.user,
-            form.cleaned_data,
-            save_shipping=form.cleaned_data["save_shipping"],
-            save_billing=form.cleaned_data["save_billing"],
-        )
+        try:
+            order = place_order(
+                cart,
+                self.request.user,
+                form.cleaned_data,
+                save_shipping=form.cleaned_data["save_shipping"],
+                save_billing=form.cleaned_data["save_billing"],
+                coupon_code=form.cleaned_data["coupon_code"],
+            )
+        except CouponError as error:
+            # The code went bad after it was applied. Never charge a price
+            # the customer didn't see: stop, and show them the real one.
+            form.add_error(
+                None,
+                f"Your order wasn't placed. {error} Without it, your total is "
+                f"${cart.total():,.2f} — place your order again, or try "
+                "another code.",
+            )
+            return self.form_invalid(form)
         messages.success(self.request, f"Order {order.number} placed. Thank you!")
         return redirect(reverse("orders:confirmation", kwargs={"pk": order.pk}))
+
+
+class CheckoutApplyCouponView(LoginRequiredMixin, View):
+    """HTMX: re-price the order summary with a code, or say why not.
+
+    Always the summary partial — a good code shows the drop and carries
+    the code to "Place order"; any other input gets a message. A blank
+    code removes the coupon. The Place-order button's total follows OOB.
+    """
+
+    def post(self, request):
+        cart = Cart.for_user(request.user)
+        code = request.POST.get("coupon_code", "")
+        return render(
+            request,
+            "orders/partials/_order_summary.html",
+            {**order_summary(cart, request.user, code), "oob_total": True},
+        )
 
 
 class CheckoutAddressFieldsView(LoginRequiredMixin, View):

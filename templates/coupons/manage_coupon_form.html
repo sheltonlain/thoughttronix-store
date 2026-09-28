@@ -1,0 +1,69 @@
+{% extends "backoffice/base.html" %}
+{% load humanize %}
+
+{% block title %}
+  {% if coupon %}Edit coupon{% else %}New coupon{% endif %} — Back office
+{% endblock %}
+
+{% block backoffice %}
+  <div class="card mx-auto max-w-2xl bg-base-100 shadow-md">
+    <div class="card-body">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="card-title">
+          {% if coupon %}Edit <span class="font-mono">{{ coupon.code }}</span>{% else %}New coupon{% endif %}
+        </h2>
+        {% if coupon %}{% include "coupons/partials/_status_badge.html" %}{% endif %}
+      </div>
+
+      {% if coupon %}
+        <div class="alert {% if coupon.is_locked %}alert-info{% endif %} mt-2" role="status">
+          <span>
+            Used by {{ coupon.use_count }} order{{ coupon.use_count|pluralize }},
+            ${{ coupon.total_discounted|intcomma }} discounted.
+            {% if coupon.is_locked %}
+              The deal (code, type, value and products) is locked now that
+              customers have it — archive this coupon and create a new one to
+              change it. Dates, limits and the switch are still yours.
+            {% endif %}
+          </span>
+        </div>
+      {% endif %}
+
+      <form method="post" class="mt-2 space-y-4">
+        {% csrf_token %}
+        {% for error in form.non_field_errors %}
+          <div class="alert alert-error" role="alert"><span>{{ error }}</span></div>
+        {% endfor %}
+        {% for field in form %}
+          {% include "products/partials/_field.html" %}
+        {% endfor %}
+        <div class="mt-2 flex items-center justify-end gap-2">
+          <a href="{% url 'coupons:manage_coupons' %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">Save coupon</button>
+        </div>
+      </form>
+
+      {% if coupon %}
+        <div class="divider"></div>
+        <div class="flex flex-wrap justify-end gap-2">
+          {% if coupon.is_archived %}
+            <form method="post" action="{% url 'coupons:manage_coupon_restore' coupon.pk %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm">Restore</button>
+            </form>
+          {% else %}
+            <form method="post" action="{% url 'coupons:manage_coupon_archive' coupon.pk %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm">Archive</button>
+            </form>
+          {% endif %}
+          {% if not coupon.is_locked %}
+            <a href="{% url 'coupons:manage_coupon_delete' coupon.pk %}" class="btn btn-error btn-outline btn-sm">
+              Delete
+            </a>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

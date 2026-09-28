@@ -19,9 +19,14 @@ A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platfo
 - `accounts/` — custom user model (`accounts.User`, `AbstractUser` + nullable
   `job_title`). Roles are Django's own vocabulary: customers are plain users,
   employees are `is_staff`, the admin is `is_superuser`. No role field, no Groups.
+  Marketing is staff holding the `coupons.manage_coupons` permission, granted
+  to each user directly.
 - `products/` — catalog (`Category`, `Product`, `Tag`), its back-office CRUD,
   and the `seed` command
 - `orders/` — cart, checkout, orders, and back-office order management
+- `coupons/` — promotional coupons: the `Coupon` model and its rules
+  (`Coupon.objects.for_code()`, `coupon.evaluate()`), and Marketing's
+  back-office Coupons tab
 - `dashboard/` — the staff analytics dashboard
 - `PROMPTS.md` — the AI-usage log; append entries, never rewrite history
 - `templates/` — project-level templates (`base.html`); app templates live in
@@ -35,9 +40,11 @@ Logic lives in models and managers; cross-model workflows get a service
 module; views stay thin.
 
 Exactly two deliberate deep modules, docstrings and type hints on every
-public function: `orders/services.py` (`place_order`, with its dormant
-`coupon_code` seam) and `dashboard/queries.py` (the dashboard's
-aggregations).
+public function: `orders/services.py` (`place_order`, which applies a
+`coupon_code` via `coupon.evaluate()`) and `dashboard/queries.py` (the
+dashboard's aggregations). Coupon rules live on the `Coupon` model, not in
+a third deep module; checkout's Apply preview and `place_order` share
+`evaluate()`, so the price shown is the price paid.
 
 Idiomatic Django throughout: class-based views, model methods, custom
 managers/querysets, forms own their validation. Settings read from `.env`

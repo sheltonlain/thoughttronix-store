@@ -19,6 +19,11 @@
     <a role="tab"
        class="tab {% if section == 'orders' %}tab-active{% endif %}"
        href="{% url 'orders:manage_orders' %}">Orders</a>
+    {% if perms.coupons.manage_coupons %}
+      <a role="tab"
+         class="tab {% if section == 'coupons' %}tab-active{% endif %}"
+         href="{% url 'coupons:manage_coupons' %}">Coupons</a>
+    {% endif %}
     <a role="tab"
        class="tab {% if section == 'dashboard' %}tab-active{% endif %}"
        href="{% url 'dashboard:index' %}">Dashboard</a>

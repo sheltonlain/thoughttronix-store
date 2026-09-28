@@ -1,0 +1,6 @@
+{# A coupon's status as a DaisyUI badge, colored by state. #}
+{% with status=coupon.status %}
+  <span class="badge {% if status == 'LIVE' %}badge-success{% elif status == 'SCHEDULED' %}badge-info{% elif status == 'EXPIRED' or status == 'USED_UP' %}badge-warning{% elif status == 'SWITCHED_OFF' %}badge-error{% else %}badge-ghost{% endif %}">
+    {{ coupon.get_status_display }}
+  </span>
+{% endwith %}

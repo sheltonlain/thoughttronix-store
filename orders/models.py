@@ -83,7 +83,9 @@ class Order(models.Model):
 
     Addresses are flat denormalized fields: the order must not change if
     the customer later edits anything. Of the card, only the last four
-    digits survive checkout.
+    digits survive checkout. A coupon is snapshotted too: ``coupon_code``
+    and ``discount`` outlive the coupon itself; ``total`` is what was
+    charged, after the discount.
     """
 
     class Status(models.TextChoices):
@@ -101,6 +103,18 @@ class Order(models.Model):
         max_length=10, choices=Status.choices, default=Status.PLACED
     )
     total = models.DecimalField(max_digits=10, decimal_places=2)
+    discount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
+    # The link counts uses; the code is the record, surviving deletion.
+    coupon = models.ForeignKey(
+        "coupons.Coupon",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
+    )
+    coupon_code = models.CharField(max_length=30, blank=True)
     email = models.EmailField()
 
     shipping_name = models.CharField(max_length=100)
@@ -133,13 +147,19 @@ class Order(models.Model):
         """The customer-facing order number, e.g. ``TT-2026-00042``."""
         return f"TT-{self.created_at.year}-{self.pk:05d}"
 
+    @property
+    def subtotal(self):
+        """The order's value before any coupon."""
+        return self.total + self.discount
+
 
 class OrderItem(models.Model):
     """One line of an order, priced as of purchase time.
 
     Name and unit price are denormalized: order history must not change
     when the catalog does. The product FK survives for linking while the
-    product exists.
+    product exists. ``discount`` is this line's share of the order's
+    coupon discount, so per-product revenue reflects what was charged.
     """
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
@@ -147,6 +167,9 @@ class OrderItem(models.Model):
     product_name = models.CharField(max_length=200)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField()
+    discount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    )
 
     class Meta:
         ordering = ["pk"]
@@ -157,3 +180,8 @@ class OrderItem(models.Model):
     @property
     def line_total(self):
         return self.unit_price * self.quantity
+
+    @property
+    def charged_total(self):
+        """The line total after its share of the coupon discount."""
+        return self.line_total - self.discount

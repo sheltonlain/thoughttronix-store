@@ -6,10 +6,14 @@ database should return to a known state.
 
 Demo logins (documented in the README):
 
-    admin / admin123        superuser
-    employee / employee123  staff, "Junior Thought Curator"
-    customer / customer123  a plain customer, with order history, a live cart,
-                            and two saved addresses
+    admin / admin123          superuser
+    employee / employee123    staff, "Junior Thought Curator"
+    marketing / marketing123  staff with the manage_coupons permission
+    customer / customer123    a plain customer, with order history, a live
+                              cart, and two saved addresses
+
+Five coupons show every coupon state, dated relative to the day the seed
+runs; SPRING-SALE has expired after a run of real (seeded) use.
 """
 
 import random
@@ -17,12 +21,14 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
 from accounts.models import Address
+from coupons.models import Coupon
 from orders.models import Cart, Order, OrderItem
 from products.models import Category, Product, Tag
 
@@ -440,6 +446,16 @@ DEMO_USERS = [
         "Junior Thought Curator",
     ),
     (
+        "marketing",
+        "marketing123",
+        "marketing@example.com",
+        "Mara",
+        "Vance",
+        True,
+        False,
+        "Director of Persuasion",
+    ),
+    (
         "customer",
         "customer123",
         "customer@example.com",
@@ -472,14 +488,46 @@ CUSTOMER_CART = [
     ("whisper-alarm-clock", 1),
 ]
 
+# Staff who get the coupons.manage_coupons permission, granted directly.
+COUPON_MANAGERS = ["marketing"]
+
+# One coupon per state, dated in days from the day the seed runs so the
+# demo never goes stale: (code, type, value, product slugs — None for the
+# whole order, min spend, starts, expires, active).
+SERAPHINE_LINE = [
+    "seraphine",
+    "seraphine-mini",
+    "seraphine-doorbell",
+    "seraphine-kitchen-display",
+    "seraphine-wall-mount",
+    "extended-range-antenna",
+]
+COUPONS = [
+    # Live: half off the whole Seraphine line, for two weeks.
+    ("SERAPHINE50", "PERCENT", "50", SERAPHINE_LINE, None, -3, 14, True),
+    # Live: a standing welcome offer, with a minimum spend.
+    ("WELCOME20", "FIXED", "20.00", None, "100.00", -60, 90, True),
+    # Expired last month — and locked, since seeded orders used it.
+    ("SPRING-SALE", "PERCENT", "15", None, None, -75, -30, True),
+    # Scheduled: written ahead, live next month.
+    ("BLACKFRIDAY", "PERCENT", "25", None, None, 30, 34, True),
+    # Switched off: it got out onto a deal forum.
+    ("LEAKED10", "PERCENT", "10", None, None, -10, 20, False),
+]
+
 # The customer demo login's visible order history: (days ago, status,
-# [(product slug, quantity), ...]). Statuses follow age, like the
-# background orders, plus one recent order still in flight.
+# [(product slug, quantity), ...], coupon code or None). Statuses follow
+# age, like the background orders, plus one recent order still in flight.
 CUSTOMER_ORDERS = [
-    (124, Order.Status.DELIVERED, [("mindsync", 1), ("syncrest", 1)]),
-    (47, Order.Status.DELIVERED, [("dreamweaver", 1)]),
-    (9, Order.Status.SHIPPED, [("seraphine-mini", 2), ("seraphine-wall-mount", 1)]),
-    (2, Order.Status.PLACED, [("veil", 1)]),
+    (124, Order.Status.DELIVERED, [("mindsync", 1), ("syncrest", 1)], None),
+    (47, Order.Status.DELIVERED, [("dreamweaver", 1)], "SPRING-SALE"),
+    (
+        9,
+        Order.Status.SHIPPED,
+        [("seraphine-mini", 2), ("seraphine-wall-mount", 1)],
+        None,
+    ),
+    (2, Order.Status.PLACED, [("veil", 1)], None),
 ]
 
 # The customer demo login's address book: (label, street, line2, city,
@@ -517,6 +565,7 @@ class Command(BaseCommand):
         self._create_users()
         self._create_customer_cart()
         self._create_customer_addresses()
+        self._create_coupons()
         self._create_orders()
 
         self.stdout.write(
@@ -525,6 +574,7 @@ class Command(BaseCommand):
                 f"{Tag.objects.count()} tags, "
                 f"{Product.objects.count()} products, "
                 f"{get_user_model().objects.count()} users, "
+                f"{Coupon.objects.count()} coupons, "
                 f"{Order.objects.count()} orders, "
                 f"and a live cart for 'customer'."
             )
@@ -533,6 +583,7 @@ class Command(BaseCommand):
     def _wipe(self):
         """Remove everything the seed owns; the rebuild starts from zero."""
         Order.objects.all().delete()
+        Coupon.objects.all().delete()
         Cart.objects.all().delete()
         Product.objects.all().delete()
         Tag.objects.all().delete()
@@ -580,6 +631,12 @@ class Command(BaseCommand):
             user.set_password(password)
             user.save()
 
+        manage_coupons = Permission.objects.get(
+            codename="manage_coupons", content_type__app_label="coupons"
+        )
+        for user in User.objects.filter(username__in=COUPON_MANAGERS):
+            user.user_permissions.add(manage_coupons)
+
         for username, first, last in BACKGROUND_CUSTOMERS:
             user = User(
                 username=username,
@@ -618,21 +675,40 @@ class Command(BaseCommand):
             update_fields=["default_shipping_address", "default_billing_address"]
         )
 
+    def _create_coupons(self):
+        today = timezone.now()
+        for code, kind, value, slugs, minimum, starts, expires, active in COUPONS:
+            coupon = Coupon.objects.create(
+                code=code,
+                discount_type=kind,
+                value=Decimal(value),
+                min_subtotal=Decimal(minimum) if minimum else None,
+                starts_at=today + timedelta(days=starts),
+                expires_at=today + timedelta(days=expires),
+                is_active=active,
+            )
+            if slugs:
+                coupon.products.set(Product.objects.filter(slug__in=slugs))
+
     def _create_orders(self):
         """Order history: 4 visible orders for 'customer', 48 background.
 
         A seeded RNG keeps every run identical (the idempotence
         contract). Statuses follow age — old orders are delivered,
         recent ones are still moving, and about one in ten was
-        cancelled along the way.
+        cancelled along the way. Orders placed while SPRING-SALE ran
+        used it, once per customer — decided without the RNG, so the
+        rest of the demo world is unchanged by it.
         """
         rng = random.Random(2026)
         now = timezone.now()
         User = get_user_model()
+        spring_sale = Coupon.objects.get(code="SPRING-SALE")
+        used_spring_sale = set()
 
         customer = User.objects.get(username="customer")
         home = customer.default_shipping_address
-        for days_ago, status, lines in CUSTOMER_ORDERS:
+        for days_ago, status, lines, coupon_code in CUSTOMER_ORDERS:
             self._build_order(
                 user=customer,
                 address=(home.street, home.city, home.state, home.zip),
@@ -643,7 +719,10 @@ class Command(BaseCommand):
                     for slug, quantity in lines
                 ],
                 rng=rng,
+                coupon=Coupon.objects.get(code=coupon_code) if coupon_code else None,
             )
+            if coupon_code == spring_sale.code:
+                used_spring_sale.add(customer)
 
         background = list(
             User.objects.filter(
@@ -667,34 +746,61 @@ class Command(BaseCommand):
                 status = Order.Status.DELIVERED
             else:
                 status = rng.choice([Order.Status.PLACED, Order.Status.SHIPPED])
+            user = rng.choice(background)
+            created_at = now - timedelta(days=days_ago, hours=rng.randint(1, 23))
+            lines = [
+                (product, rng.randint(1, 2))
+                for product in rng.sample(pool, rng.randint(1, 3))
+            ]
+            coupon = None
+            if (
+                spring_sale.starts_at <= created_at < spring_sale.expires_at
+                and status != Order.Status.CANCELLED
+                and user not in used_spring_sale
+            ):
+                coupon = spring_sale
+                used_spring_sale.add(user)
             self._build_order(
-                user=rng.choice(background),
-                created_at=now - timedelta(days=days_ago, hours=rng.randint(1, 23)),
+                user=user,
+                created_at=created_at,
                 status=status,
-                lines=[
-                    (product, rng.randint(1, 2))
-                    for product in rng.sample(pool, rng.randint(1, 3))
-                ],
+                lines=lines,
                 rng=rng,
+                coupon=coupon,
             )
 
-    def _build_order(self, *, user, created_at, status, lines, rng, address=None):
+    def _build_order(
+        self, *, user, created_at, status, lines, rng, address=None, coupon=None
+    ):
         """One order with denormalized addresses and purchase-time prices.
 
         Without an explicit ``address``, one is drawn from SEED_ADDRESSES.
         The draw happens either way, so the RNG sequence — and with it the
         rest of the demo world — is the same whether or not one is given.
+        A ``coupon`` is priced by its own ``split_discount`` — the same
+        arithmetic checkout uses — skipping the date and limit checks,
+        since these orders are history.
         """
         drawn = rng.choice(SEED_ADDRESSES)
         street, city, state, zip_code = address or drawn
         name = f"{user.first_name} {user.last_name}"
+        shares = {}
+        if coupon is not None:
+            shares = coupon.split_discount(
+                [(product.pk, product.price * quantity) for product, quantity in lines]
+            )
+        discount = sum(shares.values(), Decimal("0.00"))
         order = Order.objects.create(
             user=user,
             status=status,
             total=sum(
                 (product.price * quantity for product, quantity in lines),
                 Decimal("0.00"),
-            ),
+            )
+            - discount,
+            discount=discount,
+            coupon=coupon,
+            coupon_code=coupon.code if coupon else "",
             email=user.email,
             shipping_name=name,
             shipping_street=street,
@@ -716,4 +822,5 @@ class Command(BaseCommand):
                 product_name=product.name,
                 unit_price=product.price,
                 quantity=quantity,
+                discount=shares.get(product.pk, Decimal("0.00")),
             )

@@ -13,3 +13,16 @@ class StaffRequiredMixin(UserPassesTestMixin):
 
     def test_func(self):
         return self.request.user.is_staff
+
+
+class CouponManagerRequiredMixin(StaffRequiredMixin):
+    """Staff holding ``coupons.manage_coupons`` — Marketing, and superusers.
+
+    The permission is granted to each user directly (no Groups), so
+    Marketing is a set of staff, not a role.
+    """
+
+    def test_func(self):
+        return super().test_func() and self.request.user.has_perm(
+            "coupons.manage_coupons"
+        )

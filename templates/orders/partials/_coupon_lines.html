@@ -1,0 +1,12 @@
+{% load humanize %}
+{# Subtotal and coupon lines above an order's total — only when a coupon was used. #}
+{% if order.coupon_code %}
+  <p class="flex w-full justify-between gap-4 text-sm">
+    <span class="opacity-70">Subtotal</span>
+    <span>${{ order.subtotal|intcomma }}</span>
+  </p>
+  <p class="flex w-full justify-between gap-4 text-sm text-success">
+    <span>Coupon <span class="font-mono">{{ order.coupon_code }}</span></span>
+    <span class="whitespace-nowrap">−${{ order.discount|intcomma }}</span>
+  </p>
+{% endif %}

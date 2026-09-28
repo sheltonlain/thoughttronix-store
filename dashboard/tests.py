@@ -201,6 +201,25 @@ def test_top_products_respect_limit_cancellation_and_period(customer):
     assert [entry["product_name"] for entry in top] == ["Pulse Halo", "Whisper"]
 
 
+def test_top_products_subtract_coupon_discounts(customer):
+    """What was actually charged: a line's coupon share comes off, so the
+    ranking agrees with total revenue."""
+    order = make_order(customer, "594.98")
+    OrderItem.objects.create(
+        order=order,
+        product=None,
+        product_name="Seraphine Home Hub",
+        unit_price=Decimal("349.99"),
+        quantity=2,
+        discount=Decimal("105.00"),
+    )
+
+    top = queries.top_products()
+
+    assert top[0]["revenue"] == Decimal("594.98")
+    assert top[0]["revenue"] == queries.total_revenue()
+
+
 # --- The view ------------------------------------------------------------------
 
 
