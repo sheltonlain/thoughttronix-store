@@ -28,6 +28,157 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-09-28 — Promotional coupon codes: design interview, tests first, build, and ship
+
+The session began on 2026-09-27 and ran into 2026-09-28.
+
+### Prompts
+
+1. `/grill-me` with: "We want to implement promotional coupon codes to the
+   ThoughtTronix store. The customer will have the option to type in a
+   coupon code when they check out, and they will see the price of their
+   cart drop. The code will expire when the promotion ends. If a customer
+   types in an expired code, they should see a message saying that the
+   code is expired. We do not want them to see a broken page,a server
+   error, a blank page, or an opportunity for the customer to contact
+   Legal. Our marketing department should have the power to write the
+   coupon codes themselves and set when they retire without having to
+   file a support ticket. The coupon system must support both order-wide
+   discounts and discounts limited to specific products, such as 50% off
+   Seraphine for a limited time."
+2. (Q1, who manages coupons) "Can we go with option A and implement the
+   permission check for marketing that you mentioned we could add later?"
+3. (Q1b, how Marketing is identified) "Yes, go with A"
+4. (Q2, discount kinds) "Go with c"
+5. (Q3, fixed amount per order or per unit) "a"
+6. (Q4, choosing covered products) "a"
+7. (Q5, a coupon's lifetime) "c"
+8. (Q6, usage limits) "c"
+9. (Q7, how a code is applied) "b"
+10. (Q8, a code gone bad before "Place order") "a"
+11. (Q9, what an order records) "b"
+12. (Q10, code uniqueness and reuse) "c"
+13. (Q11, editing after use) "b"
+14. (Q12, minimum spend) "b"
+15. (Q13, where the code lives) "b"
+16. (Q14, the Coupons tab) "Let's go with your recommendation of b with
+    the usage summary"
+17. (Q15, demo seed data) "c"
+18. "First, I want us to add some tests for the new code that we will be
+    implementing"
+19. "Implement the code we discussed"
+20. "How can i manually verify the features in the browser?"
+21. "commit and push the feature"
+22. "merge it into main and push"
+23. "delete the feature branch"
+24. "In the checkout screen, can you make the words \"Have a coupon code?\"
+    written in blue so they stand out more?"
+25. "Can you make the apply button appear blue as well?"
+26. "commit and push the changes with a message saying what changed"
+27. "Add our session log to PROMPTS.md"
+
+### Summary
+
+- **Outcome:**
+  - **Design interview (15 questions + one follow-up).** Before asking
+    anything, the codebase was read: `place_order`'s dormant
+    `coupon_code` seam and the Top Products query were found there.
+    Settled:
+    - **Access:** a Coupons tab gated on `is_staff` plus a
+      `coupons.manage_coupons` permission granted per user (no Groups).
+    - **Discounts:** percent or fixed; a fixed amount comes off once per
+      order; a hand-picked product list, where empty means order-wide;
+      an optional minimum spend over covered products.
+    - **Lifetime and limits:** an Active switch, a start, and a required
+      end; per-customer (default 1) and total use limits.
+    - **Codes:** unique among unarchived coupons, so archiving frees a
+      code; a used coupon's terms are locked.
+    - **Checkout:** an HTMX Apply preview, and a code gone bad before
+      "Place order" blocks the order.
+    - **Orders and dashboard:** the discount is snapshotted on the order
+      and split across its lines; Top Products subtracts it.
+    - **Structure and seed:** a new `coupons` app with its rules on the
+      model; seed coupons in every state, plus historical orders that
+      used one.
+  - **Tests first:** 79 tests (counting parametrized cases) across three
+    new files
+    (`coupons/test_models.py`, `coupons/test_backoffice.py`,
+    `orders/test_coupon_checkout.py`) and one dashboard test. They pinned
+    the interface names, the message wording, and the cent-exact
+    arithmetic. The old "seam is accepted and ignored" test was removed.
+  - **Build:**
+    - **`coupons` app:** `Coupon.objects.for_code()`,
+      `coupon.evaluate()`, `split_discount()`, status and summary, plus
+      the Coupons tab with list, filters, create, edit, archive, restore
+      and delete.
+    - **Checkout:** `CouponManagerRequiredMixin`; `place_order` locks and
+      re-checks the coupon; an Apply endpoint with an order-summary
+      partial and an out-of-band total on the Place-order button.
+    - **Pages and data:** coupon lines on the order pages; migrations
+      `coupons/0001` and `orders/0003`; the seed gains a `marketing`
+      login, five coupons, and 10 SPRING-SALE orders (one per customer).
+    - **Docs:** README and CLAUDE.md updated.
+    - **Checks:** suite green at 318 passed and ruff clean. The seed was
+      run twice against a scratch database: the output was identical
+      and every coupon landed in its intended state.
+  - **Shipped:** committed as `e0e12dd` on a `feature/coupons` branch,
+    pushed, fast-forwarded into `main`, pushed, and the branch deleted
+    locally and on GitHub. A follow-up made "Have a coupon code?" blue
+    and semibold (`text-primary`) and the Apply button `btn-primary`,
+    committed as `9de13fc` and pushed to `main`.
+- **Deviations:**
+  - **Q1:** took option A but also asked for the Marketing permission
+    check that had been offered only as a later add-on, which needed a
+    follow-up question (Q1b).
+  - **Q2:** chose both discount types (C) over the recommended
+    percent-only (A), which opened Q3 (per order vs per unit).
+  - **Q10:** chose "archiving frees a code" (C) over the recommended
+    "unique forever" (A), which reshaped the uniqueness rule, the
+    expired message for archived codes, and restore.
+  - **Every other answer took the recommendation.**
+  - **Asked for tests before implementation** rather than taking the
+    offered next step of writing `prd/coupons.md` and `plans/coupons.md`.
+    Those docs were never written.
+  - **Asked how to verify the feature in the browser;** a five-part
+    walkthrough was given.
+  - **Asked to merge into `main`** after the first push went to a
+    feature branch.
+- **Sideways:**
+  - **Suite couldn't run until the build.** While only the tests
+    existed, their import errors made a plain `pytest` stop at
+    collection. This was flagged, with `--continue-on-collection-errors`
+    as the workaround.
+  - **Two test-writing slips.** One expected discount was written as
+    $174.99 when half-up rounding gives $175.00; it was fixed before any
+    run. A test file's import order was fixed by ruff.
+  - **Duplicate code hit the database.** Duplicate codes reached the
+    database as an IntegrityError: a ModelForm skips a conditional
+    unique constraint when the condition's field (`is_archived`) isn't
+    on the form. The fix was a check in `Coupon.clean()`, with the
+    constraint kept as the backstop.
+  - **Coupon list pagination warned "unordered".** `Meta.ordering`
+    doesn't apply to the list's GROUP BY query; fixed with an explicit
+    `order_by`.
+  - **A checkout test failed on escaping.** It looked for "don't
+    recognize", but Django renders the apostrophe as `&#x27;`. The test
+    assertion was changed (not the message).
+  - **Ruff DJ012.** It asked for `save()` before `clean()`.
+  - **Design adjustments made while building, and reported:**
+    `Order.subtotal` became a computed property rather than a stored
+    field; archiving also switches a coupon off; restoring leaves it
+    off.
+  - **Rules the tests pinned without discussion:** half-up rounding; a
+    cancelled order gives its use back; "expired" wins over "switched
+    off"; `CouponError` subclasses `ValueError`; the exact message
+    wording. They were flagged to the user and not revisited.
+  - **Not verified in a browser.** The HTMX out-of-band total and the
+    `form="checkout-form"` hidden input were never checked in one (a
+    manual test plan was given instead). The coupon row lock is
+    untested, because SQLite ignores `select_for_update`.
+  - **Pre-existing, not fixed.** While checking the seed,
+    `total_revenue()` returned long decimals on SQLite (e.g.
+    `57391.8500000000`). This predates the feature.
+
 ## 2026-09-26 — Saved addresses: manual test plan, shipping, and checkout nicknames (cont.)
 
 Continues the session logged in the entry below, after that entry's log
