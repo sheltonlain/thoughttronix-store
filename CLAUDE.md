@@ -44,5 +44,5 @@ beyond HTMX.
 ## Before you start
 
 - Touching orders, coupons, dashboard, or permissions → read `docs/ARCHITECTURE.md`
-- Adding or editing a view, URL, template, or HTMX endpoint → read `docs/TEMPLATES.md`
+- Adding or editing a view, URL, template, or HTMX endpoint → read `docs/FRONTEND.md`
 - Writing or changing tests → read `docs/TESTING.md`

@@ -11,6 +11,7 @@
 - HTMX endpoints render partials from `templates/<app>/partials/_<name>.html` —
   prefixed with an underscore, never extending `base.html`.
 - Every list view gets a designed empty state, not a blank page.
+- Each page has at most one btn-primary for its main action. Other buttons and button-styled links use btn-ghost or btn-outline.
 
 ## URL conventions
 
