@@ -28,6 +28,89 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-04 — Product images: implemented from the handoff, verified, and shipped
+
+### Prompts
+
+1. "@HANDOFF.md Implement this feature"
+2. (After rejecting my edit that moved an inline test import to the top
+   of `products/test_images.py`) "Why do you want to make this edit?"
+3. "go ahead with the import move"
+4. (After rejecting my edits to `docs/ARCHITECTURE.md` and
+   `docs/FRONTEND.md`) "We don't want to add verbose explanations to the
+   files in docs/ What is the next step you would take?"
+5. "Add jus the one sentence to the doc file. Then go ahead with ruff and
+   the full test suite."
+6. "run the seed"
+7. "how can I  manually verify the feature in the browser"
+8. "There is a major issue with the image thumbnails in the cart and in the
+   back office. They are not displaying as small images, but instead as
+   full-size images that take up almost the entire screen. Please fix this
+   issue and make sure the thumbnails are small as originally discussed."
+9. "It looks good. Please reseed."
+10. "Commit and push the feature, with a message that says what changed."
+    — then, asked where to push and what to do with `HANDOFF.md`: "Push to
+    main" and "Leave it out" (both my recommendations).
+11. "add our session log to PROMPTS.md"
+
+### Summary
+
+- **Outcome:**
+  - **Built the `HANDOFF.md` design.** Fixed the missing
+    `MEDIA_URL`/`MEDIA_ROOT` first. Added `Product.image` (migration
+    `0004_product_image`), a shared resize-to-1200-px WebP step in
+    `products/images.py`, and `display_image_url` / `display_image_alt`
+    with the placeholder fallback. File cleanup lives in `save()` and
+    `delete()` via `on_commit`. `ProductForm.clean_image` rejects files
+    with plain-language reasons. Images show in a 4:3 frame on the
+    catalog, detail page, cart, back-office list, and edit form. `seed`
+    imports the 12 mapped photos and empties `media/products/` on wipe.
+  - **Tests:** 24 new in `products/test_images.py`, plus an autouse
+    throwaway `MEDIA_ROOT` and a `make_image` fixture in `conftest.py`.
+    The full suite passed at 342 before the thumbnail fix; after it, only
+    the image and order tests were re-run (173 passed). Ruff clean.
+  - **Docs:** one sentence in `docs/ARCHITECTURE.md` saying production
+    must serve `MEDIA_ROOT` at `MEDIA_URL`.
+  - **Shipped:** seeded twice. Committed as `46dab1a` "Add product images"
+    and pushed to `origin/main`, with `product-images/` and the
+    design-session PROMPTS.md entry. `HANDOFF.md` left untracked.
+- **Deviations:**
+  - **Docs:** I drafted a multi-paragraph "Media files" section and a
+    `FRONTEND.md` convention line. The user rejected both: no verbose
+    explanations in `docs/`, just the one sentence the handoff named. The
+    `FRONTEND.md` line was dropped.
+  - **Import move:** the user stopped the edit to ask why. I explained
+    (project style, ruff's import rule) and it went ahead.
+  - **PROMPTS.md:** the handoff listed appending an entry as a finishing
+    step. I skipped it because this file says entries are added only
+    when asked, and said so. The user asked at the end.
+  - **Beyond the handoff:** `FORM_RENDERER = TemplatesSetting` plus
+    `"django.forms"` in `INSTALLED_APPS`, for a DaisyUI-styled
+    remove-image checkbox. A `has_display_image` property. Fixed pixel
+    sizes on thumbnails. Each was reported to the user.
+- **Sideways:**
+  - **First full run: 2 failures.** Django's form `ImageField` checks the
+    file extension before `clean_image` runs, so a real PNG named `.txt`
+    was rejected. My rename only got past the model's check. Fixed by
+    dropping the form field's extension validator. The transparency test
+    used a fully opaque RGBA image, which WebP saves without alpha; the
+    fixture now uses a half-transparent fill.
+  - **Megapixel message:** it would have read "(40 megapixels). The limit
+    is 40" for an image just over the limit. Caught before any run; now
+    one decimal place.
+  - **Ruff's Django ordering rule (DJ012) took two tries,** because it
+    counts `delete()` as a custom method. Its first `--fix` also re-sorted
+    the imports in the user's uncommitted `config/urls.py`; reported.
+  - **Full-size thumbnails, found by the user in the browser.** I could
+    not reproduce the cause on the server. The markup was right, every
+    class was in the compiled CSS, and the running server sent the
+    current stylesheet. My best guess, still unconfirmed, is that the
+    browser cached an old `tailwind.css`. I also lost time on grep
+    patterns that wrongly assumed the CSS was minified. Fix: `width` and
+    `height` attributes on the thumbnails, so they stay small without
+    the CSS; a test now checks for them. The user confirmed it looks
+    good.
+
 ## 2026-10-04 — Product images: design interview and handoff
 
 ### Prompts

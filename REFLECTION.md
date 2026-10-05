@@ -1,3 +1,43 @@
+## Product Images
+
+Question 1 - One decision from grill me. 
+
+When the agent and I were deciding how the product images should be displayed, it outlined multiple options including cropping each image to a certain size, which sounded like a good option at first. However, upon further investigation, I found out that uploaded images would be autocropped with no control or input by employees uploading them, and the only way to fix errors would be to resumbit a precropped image that looks the exact way you want it. This would have led to tops/bottoms of images being cutoff and would have made it a hassle to fix. I still wanted my images to be uniform across the catalog, so I opted to display the full image within a 4:3 frame and filled in with a background anywhere the image did not naturally fit. I was worried this might come out looking wonky too, but we opted to center the images and fill in the blank space with a color that matches our night theme, so it ultimately worked out in the end. One mistake I did make was keeping the same tailwind server running from start to end. Since it was never rebuilt and I was running an older tailwind version, the images did not load into that 4:3 window like I had requested. I asked the agent to fix this issue, and they did not find an error in the code, which is when I realized the old tailwind server was probably my mistake. However, I opted to have the agent go ahead and hardcode image size into the product list, product page, cart, and back office to avoid this issue in the future. 
+
+Question 2 - Find the upload code.
+
+products/models.py
+line 79
+image = models.ImageField(upload_to="products/", blank=True)
+
+upload_to places the image inside a products subfolder and defines the database value as products/file_name.jpg (for example).
+
+templates/products/manage_product_form.html
+line 13
+<form method="post" enctype="multipart/form-data" class="mt-2 space-y-4">
+
+This tells the browser that the form includes a file. Without it, files cannot be uploaded properly. 
+
+
+Question 3 - Follow the upload process. 
+
+On disk: media/products/dream-sync.webp
+MEDIA_ROOT determines this path as BASE_DIR points to "media" and combines it with the database value, which is products/dream-sync.webp, giving us the path shown above.
+
+In database: products/dream-sync.webp
+The line image = models.ImageField(upload_to="products/") determines this path. Specifically "upload_to" which uploads the image to a products subfolder. The database value begins with "products/" as specified, followed by the filename (which is automatically slugged in our webapp if the name is unsuitable. In this case I uploaded the image and named it appropriately as dream-sync.webp)
+
+URL: /media/products/dream-sync.webp
+MEDIA_URL determines this path. It points to "media/" and combines it with the database value, which is products/dream-sync.webp, which gives us the path listed above.
+
+The media URL pattern in config/urls.py line 27 allows our URL to run during development: 
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+According to what we learned in our lesson, this line of code connects URLS beginning with MEDIA_URL to files stored under MEDIA_ROOT. However, this will only run in the development server as DEBUG is not built for production. 
+
+
 ## Featured Products. 
 
 Question 1 - Trace the feature. Explain how marking a product as featured in the admin interface causes the badge to appear in the storefront. Explain the files involved and the code logic. 
@@ -25,3 +65,4 @@ Question 3 - Judgement. Describe one challenge, unexpected result, or edge case 
     Question 2 - The change. Explain the change you made after reviewing the feature. Describe your original choice, what the browser showed you, why you wanted to change it, and how the fix works. If any existing test failed during your build, name it and say what you did about it.
 
     I honestly liked what the AI built for the most part, but I did opt to make the section where the coupon was applied more visible. Before the change, the section to add the coupon was written in small grey lettering reading "Have a coupon code?" and it was not very visible to someone who might be checking out in a hurry. I decided to make that text as well as the apply button blue so it would be more visible to customers. The fix was simple -- just a change in the html. 
+
