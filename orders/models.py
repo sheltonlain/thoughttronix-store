@@ -35,7 +35,8 @@ class Cart(models.Model):
 
     def lines(self):
         """Line items with their products loaded, ready for display."""
-        return self.items.select_related("product")
+        # The category gives the image placeholder, so load it too.
+        return self.items.select_related("product__category")
 
     def total(self):
         return sum((item.line_total for item in self.lines()), Decimal("0.00"))

@@ -14,3 +14,8 @@ Roles are Django's own vocabulary: customers are plain users, employees are
 `is_staff`, the admin is `is_superuser`. No role field, no Groups.
 Marketing is staff holding the `coupons.manage_coupons` permission, granted
 to each user directly.
+
+## Media files
+
+Django serves uploaded product images only when `DEBUG` is on; production
+must serve `MEDIA_ROOT` at `MEDIA_URL` itself.

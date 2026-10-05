@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
+    "django.forms",
     # Third-party
     "django_tailwind_cli",
     # Local
@@ -75,6 +76,10 @@ TEMPLATES = [
         },
     },
 ]
+
+# Widget templates resolve through TEMPLATES, so a project template can
+# restyle a widget (templates/products/widgets/). Needs "django.forms".
+FORM_RENDERER = "django.forms.renderers.TemplatesSetting"
 
 WSGI_APPLICATION = "config.wsgi.application"
 
@@ -135,6 +140,15 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 STATICFILES_DIRS = [BASE_DIR / "assets"]
+
+
+# Media (staff-uploaded product images)
+# Served by Django only when DEBUG is on; production must serve MEDIA_ROOT
+# at MEDIA_URL itself (see docs/ARCHITECTURE.md).
+
+MEDIA_URL = "media/"
+
+MEDIA_ROOT = env.path("MEDIA_ROOT", default=BASE_DIR / "media")
 
 
 # Tailwind CSS + DaisyUI (django-tailwind-cli, standalone binary — no Node.js)

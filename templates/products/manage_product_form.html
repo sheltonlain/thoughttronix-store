@@ -10,7 +10,7 @@
       <h2 class="card-title">
         {% if form.instance.pk %}Edit &ldquo;{{ form.instance.name }}&rdquo;{% else %}New product{% endif %}
       </h2>
-      <form method="post" class="mt-2 space-y-4">
+      <form method="post" enctype="multipart/form-data" class="mt-2 space-y-4">
         {% csrf_token %}
         {% for field in form %}
           {% include "products/partials/_field.html" %}

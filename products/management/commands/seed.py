@@ -14,12 +14,16 @@ Demo logins (documented in the README):
 
 Five coupons show every coupon state, dated relative to the day the seed
 runs; SPRING-SALE has expired after a run of real (seeded) use.
+
+Product photos are imported from ``product-images/`` at the repo root,
+through the same resize-and-encode step as back-office uploads.
 """
 
 import random
 from datetime import timedelta
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.management.base import BaseCommand
@@ -432,6 +436,25 @@ CATALOG = {
     ],
 }
 
+# Product photos: product name -> file in IMAGE_SOURCE_DIR. Products not
+# listed keep their category placeholder. ("SyncRest GPT No Text.png" is
+# deliberately unused.)
+IMAGE_SOURCE_DIR = settings.BASE_DIR / "product-images"
+PRODUCT_IMAGES = {
+    "Calm Collar": "Calm Collar GPT Man.png",
+    "CrowdCalm Array": "CrowdCalm Array No Text.png",
+    "DreamWeaver": "DreamWeaver Matrix GPT 3.png",
+    "Hush": "Hush GPT No Text.png",
+    "MindSync": "MindSync GPT 2.png",
+    "MindSync Duo": "MindSync Duo.png",
+    "MoodSet": "MoodSet GPT No Text.png",
+    "RecallPro": "RecallPro.png",
+    "Seraphine": "Seraphine GPT Text.png",
+    "SoulSear Mark I": "SoulSear No Text.png",
+    "SyncRest": "SyncRest GPT Text.png",
+    "Veil": "Veil GPT Text.png",
+}
+
 DEMO_USERS = [
     # (username, password, email, first, last, is_staff, is_superuser, job_title)
     ("admin", "admin123", "admin@example.com", "Ada", "Admin", True, True, None),
@@ -562,6 +585,7 @@ class Command(BaseCommand):
         self._wipe()
         tags = self._create_tags()
         self._create_catalog(tags)
+        self._attach_images()
         self._create_users()
         self._create_customer_cart()
         self._create_customer_addresses()
@@ -588,6 +612,12 @@ class Command(BaseCommand):
         Product.objects.all().delete()
         Tag.objects.all().delete()
         Category.objects.all().delete()
+        # A bulk delete skips Product.delete(), so empty the image folder
+        # here — otherwise re-imported files would collect name suffixes.
+        storage = Product._meta.get_field("image").storage
+        if storage.exists("products"):
+            for name in storage.listdir("products")[1]:
+                storage.delete(f"products/{name}")
 
         managed_usernames = [username for username, *_ in DEMO_USERS] + [
             username for username, *_ in BACKGROUND_CUSTOMERS
@@ -615,6 +645,22 @@ class Command(BaseCommand):
                     category=category,
                 )
                 product.tags.set(tags[tag_name] for tag_name in tag_names)
+
+    def _attach_images(self):
+        """Import the demo photos; a missing source file warns and moves on."""
+        for name, filename in PRODUCT_IMAGES.items():
+            product = Product.objects.get(name=name)
+            path = IMAGE_SOURCE_DIR / filename
+            if not path.is_file():
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Image not found for {name}: {path}. It keeps its placeholder."
+                    )
+                )
+                continue
+            with path.open("rb") as source:
+                product.set_image(source)
+            product.save()
 
     def _create_users(self):
         User = get_user_model()

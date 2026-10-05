@@ -28,6 +28,91 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-04 — Product images: design interview and handoff
+
+### Prompts
+
+1. `/grill-me` with: "We need to add available product images to our
+   website. The images are locateed in the product-images folder within our
+   thoughttronix-store repository. The images are labeled with the products
+   they are associated with. We need to make sure that the display is
+   consistent across the catalog and that pages do not slow down. Every
+   product must display either its uploaded image when one is available, or
+   the existing placeholder. Missing files and broken image icons are
+   unacceptable. Employees will also need to upload product images through
+   the back office. If an employee uploads an unusable file, reject it and
+   explain in plain language why it was rejected."
+2. (Q1, images per product) "1"
+3. (Q2, keeping pages fast) "2"
+4. (Q3, consistent frame) "2"
+5. (Q4, a missing file on disk) "2"
+6. (Q5, attaching the demo images) "1"
+7. (Q6, which file goes with which product) "I agree witht the changed
+   except 2. I want to use the text version for SyncRest."
+8. (Q7, what counts as unusable) "2"
+9. (Q8, old files on replace/delete) "2"
+10. (Q9, where images appear) "2"
+11. (Q10, saved file format) "1"
+12. (Q11, alt text) "2"
+13. (Q12, serving media with DEBUG off) "1"
+14. (Q13, image files in tests) "A1 + B1"
+15. (Q14, seed source file missing) "2"
+16. `/handoff` with: "the next session implements the design we just agreed"
+17. "add our session log to PROMPTS.md"
+
+### Summary
+
+- **Outcome:**
+  - **Design interview (14 questions).** Before any question, the codebase
+    was read: the placeholder logic (`Category.placeholder_image`), the
+    two templates that show images, the 13 source PNGs (sizes, dimensions,
+    and filenames that don't match product names exactly), the back-office
+    form and its `StaffRequiredMixin` gate, and `seed`'s wipe. Settled:
+    - **Storage:** one optional `ImageField` on `Product`; `media/`
+      gitignored.
+    - **Speed:** resize once on save to 1200 px max, WebP quality ~80,
+      original discarded; `loading="lazy"` on catalog cards.
+    - **Consistency:** a fixed 4:3 frame, `object-contain` on
+      `bg-base-200`.
+    - **Never broken:** a `Product.display_image_url` property that checks
+      the file exists and falls back to the placeholder; generated alt text
+      (`""` for placeholders).
+    - **Uploads:** reject a file that isn't a real image, isn't
+      JPEG/PNG/WebP, is over 10 MB, is under 600×450, or is over 40 MP,
+      each with a plain-language message.
+    - **Cleanup:** old files deleted in the model after commit; `seed`
+      empties `media/products/`.
+    - **Where shown:** catalog, detail, edit-form preview, cart and
+      back-office list thumbnails; not order history or the dashboard.
+    - **Seed:** an explicit name→file mapping for 12 products; warn and
+      continue on a missing source file.
+    - **Serving:** development only, documented in
+      `docs/ARCHITECTURE.md`.
+    - **Tests:** a throwaway `MEDIA_ROOT` per test, images generated with
+      Pillow, one real-import `seed` test.
+  - **Handoff:** the full design, mapping table, and placement guidance
+    were written to `HANDOFF.md` for the next session to implement. No
+    feature code was written and nothing was committed.
+- **Deviations:**
+  - **Q6:** the user overrode one of my three mapping recommendations,
+    choosing `SyncRest GPT Text.png` over the recommended "No Text"
+    version. The other two (MindSync, SoulSear Mark I only) were taken.
+  - **Every other answer took the recommendation.**
+  - The offered `plans/product-images.md` was not written; the user asked
+    for a handoff instead, so `HANDOFF.md` is the only record of the
+    design.
+- **Sideways:**
+  - **The user's uncommitted `config/urls.py` change breaks the app.** It
+    serves `MEDIA_URL`/`MEDIA_ROOT`, but neither is defined in settings.
+    Found while exploring, flagged, and recorded as the first fix in
+    `HANDOFF.md`; not fixed this session.
+  - **Two gaps in the agreed design were found mid-interview.**
+    `seed`'s bulk `Product.objects.all().delete()` skips
+    `Product.delete()`, so the Q8 cleanup wouldn't run on re-seed; I
+    decided without asking that `_wipe()` empties `media/products/`.
+    And the `DEBUG`-only media serving would show broken images with
+    `DEBUG` off even when Q4's file check passes, which became Q12.
+
 ## 2026-09-28 — Promotional coupon codes: design interview, tests first, build, and ship
 
 The session began on 2026-09-27 and ran into 2026-09-28.

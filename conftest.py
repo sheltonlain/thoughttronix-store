@@ -6,14 +6,43 @@ grows with the project; tests never invoke the seed command.
 
 from datetime import timedelta
 from decimal import Decimal
+from io import BytesIO
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from PIL import Image
 
 from accounts.models import Address
 from orders.models import Cart, CartItem
 from products.models import Category, Product, Tag
+
+
+@pytest.fixture(autouse=True)
+def media_root(settings, tmp_path):
+    """Every test writes uploaded files to its own throwaway MEDIA_ROOT."""
+    settings.MEDIA_ROOT = tmp_path / "media"
+    return settings.MEDIA_ROOT
+
+
+@pytest.fixture
+def make_image():
+    """Build an image upload in memory with Pillow.
+
+    ``size`` and ``fmt`` pick the picture; ``name`` is the uploaded
+    filename (its extension needn't match); ``mode`` RGBA gives a
+    half-transparent fill; ``padding`` appends junk bytes to inflate it.
+    """
+
+    def make(size=(800, 600), fmt="PNG", name=None, mode="RGB", padding=0):
+        buffer = BytesIO()
+        color = (0, 128, 128, 128) if mode == "RGBA" else "teal"
+        Image.new(mode, size, color).save(buffer, fmt)
+        name = name or f"photo.{fmt.lower()}"
+        return SimpleUploadedFile(name, buffer.getvalue() + b"\0" * padding)
+
+    return make
 
 
 @pytest.fixture

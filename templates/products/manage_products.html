@@ -29,11 +29,22 @@
           {% for product in products %}
             <tr>
               <td>
-                <a href="{% url 'products:manage_product_update' product.pk %}"
-                   class="link-hover font-semibold">{{ product.name }}</a>
-                {% if product.tagline %}
-                  <p class="text-xs italic opacity-60">{{ product.tagline }}</p>
-                {% endif %}
+                <div class="flex items-center gap-3">
+                  <figure class="aspect-[4/3] w-16 shrink-0 overflow-hidden rounded bg-base-200">
+                    <img src="{{ product.display_image_url }}"
+                         alt="{{ product.display_image_alt }}"
+                         width="64" height="48"
+                         loading="lazy"
+                         class="h-full w-full object-contain" />
+                  </figure>
+                  <div>
+                    <a href="{% url 'products:manage_product_update' product.pk %}"
+                       class="link-hover font-semibold">{{ product.name }}</a>
+                    {% if product.tagline %}
+                      <p class="text-xs italic opacity-60">{{ product.tagline }}</p>
+                    {% endif %}
+                  </div>
+                </div>
               </td>
               <td>{{ product.category.name }}</td>
               <td>${{ product.price|intcomma }}</td>

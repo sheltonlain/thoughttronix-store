@@ -17,8 +17,14 @@
         {% for item in cart.lines %}
           <tr>
             <td>
-              <a href="{{ item.product.get_absolute_url }}" class="link-hover font-semibold">
-                {{ item.product.name }}
+              <a href="{{ item.product.get_absolute_url }}" class="flex items-center gap-3">
+                <figure class="aspect-[4/3] w-16 shrink-0 overflow-hidden rounded bg-base-200">
+                  <img src="{{ item.product.display_image_url }}"
+                       alt="{{ item.product.display_image_alt }}"
+                       width="64" height="48"
+                       class="h-full w-full object-contain" />
+                </figure>
+                <span class="link-hover font-semibold">{{ item.product.name }}</span>
               </a>
             </td>
             <td>${{ item.product.price|intcomma }}</td>

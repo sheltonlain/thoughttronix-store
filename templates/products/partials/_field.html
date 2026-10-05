@@ -1,5 +1,6 @@
 {# One back-office form field: label, widget, and its errors beside it. #}
 {# Checkboxes render inline with their label (a DaisyUI toggle). #}
+{# The product image field previews the current image above its input. #}
 <div>
   {% if field.widget_type == "checkbox" %}
     <label class="label cursor-pointer justify-start gap-3" for="{{ field.id_for_label }}">
@@ -8,6 +9,14 @@
     </label>
   {% else %}
     <label class="label mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+    {% if field.name == "image" and form.instance.has_display_image %}
+      <figure class="mb-3 aspect-[4/3] w-48 overflow-hidden rounded-box bg-base-200">
+        <img src="{{ form.instance.display_image_url }}"
+             alt="{{ form.instance.display_image_alt }}"
+             width="192" height="144"
+             class="h-full w-full object-contain" />
+      </figure>
+    {% endif %}
     {{ field }}
   {% endif %}
   {% if field.help_text %}
