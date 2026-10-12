@@ -135,16 +135,16 @@ default. Completing a reset sends a security alert to the verified address.
 
 ### Acceptance criteria
 
-- [ ] The sign-in page links to the reset request page.
-- [ ] A verified email (in any capitalization) receives a reset link; an
+- [x] The sign-in page links to the reset request page.
+- [x] A verified email (in any capitalization) receives a reset link; an
       unverified, unknown, inactive, or unusable-password account receives
       nothing, and the page reads the same in every case.
-- [ ] The link sets a new password, subject to the store's validators, and
+- [x] The link sets a new password, subject to the store's validators, and
       the customer can then sign in with it.
-- [ ] The link fails after one use and after one hour (time controlled in
+- [x] The link fails after one use and after one hour (time controlled in
       tests).
-- [ ] Completing a reset sends a security alert email.
-- [ ] The app runs with no `.env`; the timeout can be overridden from it.
+- [x] Completing a reset sends a security alert email.
+- [x] The app runs with no `.env`; the timeout can be overridden from it.
 
 ---
 

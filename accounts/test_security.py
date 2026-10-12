@@ -1,11 +1,16 @@
 """The account security center: the hub, its navbar link, password change
-and its security alert, and the grandfathering of emails that existed
-before verification."""
+and its security alert, forgot password, and the grandfathering of emails
+that existed before verification."""
 
-from datetime import UTC, datetime
+import os
+import re
+import subprocess
+import sys
+from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 
 import pytest
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core import mail
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
@@ -172,6 +177,184 @@ def test_security_alert_skips_unverified_email(customer):
 
     assert customer.send_security_alert("Your password was changed") is False
     assert mail.outbox == []
+
+
+# --- Forgot password ------------------------------------------------------------
+
+
+def request_reset(client, email):
+    return client.post(reverse("accounts:password_reset"), {"email": email})
+
+
+def reset_link(message):
+    """The set-new-password path from a reset email."""
+    return re.search(r"https?://[^/\s]+(/accounts/reset/\S+/)", message.body).group(1)
+
+
+def set_new_password(client, link, new1=NEW_PASSWORD, new2=None):
+    """Open the emailed link, then submit the new password on the page it
+    lands on. (Django swaps the token into the session and redirects, so
+    the token never sits in the form page's URL.)"""
+    form_page = client.get(link, follow=True)
+    return client.post(
+        form_page.redirect_chain[-1][0],
+        {"new_password1": new1, "new_password2": new1 if new2 is None else new2},
+    )
+
+
+def test_sign_in_page_links_to_password_reset(client, db):
+    page = client.get(reverse("accounts:login")).content.decode()
+
+    assert "Forgot password?" in page
+    assert reverse("accounts:password_reset") in page
+
+
+@pytest.mark.parametrize(
+    "typed", ["verified@example.com", "VERIFIED@Example.COM"], ids=["exact", "caps"]
+)
+def test_password_reset_emails_a_verified_address(client, verified_customer, typed):
+    response = request_reset(client, typed)
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == reverse("accounts:password_reset_done")
+    assert len(mail.outbox) == 1
+    message = mail.outbox[0]
+    assert message.to == ["verified@example.com"]
+    assert "/accounts/reset/" in reset_link(message)
+    assert "expires in one hour" in message.body
+
+
+def make_unverified(user):
+    user.email_verified_at = None
+    user.save()
+
+
+def make_inactive(user):
+    user.is_active = False
+    user.save()
+
+
+def make_passwordless(user):
+    user.set_unusable_password()
+    user.save()
+
+
+@pytest.mark.parametrize(
+    ("change", "typed"),
+    [
+        (make_unverified, "verified@example.com"),
+        (None, "nobody@example.com"),
+        (make_inactive, "verified@example.com"),
+        (make_passwordless, "verified@example.com"),
+    ],
+    ids=["unverified", "unknown", "inactive", "unusable-password"],
+)
+def test_password_reset_sends_nothing_without_a_match(
+    client, verified_customer, change, typed
+):
+    if change:
+        change(verified_customer)
+
+    response = request_reset(client, typed)
+
+    # The same redirect to the same page as a real match: nothing given away.
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == reverse("accounts:password_reset_done")
+    assert mail.outbox == []
+
+
+def test_password_reset_sets_new_password_and_alerts(client, verified_customer):
+    request_reset(client, "verified@example.com")
+    link = reset_link(mail.outbox[0])
+
+    response = set_new_password(client, link)
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.url == reverse("accounts:password_reset_complete")
+    assert len(mail.outbox) == 2
+    alert = mail.outbox[1]
+    assert alert.to == ["verified@example.com"]
+    assert "Your password was reset" in alert.body
+    assert "If this wasn't you, reset your password" in alert.body
+
+    signed_in = client.post(
+        reverse("accounts:login"),
+        {"username": "verified", "password": NEW_PASSWORD},
+    )
+    assert signed_in.status_code == HTTPStatus.FOUND
+    assert client.get(reverse("accounts:security")).status_code == HTTPStatus.OK
+
+
+def test_password_reset_enforces_password_validators(client, verified_customer):
+    request_reset(client, "verified@example.com")
+
+    response = set_new_password(client, reset_link(mail.outbox[0]), "12345678")
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.context["form"].errors["new_password2"]
+    verified_customer.refresh_from_db()
+    assert verified_customer.check_password("verified123")
+    assert len(mail.outbox) == 1  # the reset link; no alert
+
+
+def test_password_reset_link_works_only_once(client, verified_customer):
+    request_reset(client, "verified@example.com")
+    link = reset_link(mail.outbox[0])
+    set_new_password(client, link)
+
+    response = Client().get(link, follow=True)
+
+    assert response.context["validlink"] is False
+    assert "doesn't work" in response.content.decode()
+    assert reverse("accounts:password_reset") in response.content.decode()
+
+
+@pytest.mark.parametrize(
+    ("elapsed", "valid"),
+    [(timedelta(minutes=59), True), (timedelta(hours=1, seconds=1), False)],
+    ids=["within-hour", "after-hour"],
+)
+def test_password_reset_link_expires_after_an_hour(
+    client, verified_customer, monkeypatch, elapsed, valid
+):
+    sent_at = datetime(2026, 10, 11, 14, 0)
+    monkeypatch.setattr(PasswordResetTokenGenerator, "_now", lambda self: sent_at)
+    request_reset(client, "verified@example.com")
+    link = reset_link(mail.outbox[0])
+
+    monkeypatch.setattr(
+        PasswordResetTokenGenerator, "_now", lambda self: sent_at + elapsed
+    )
+    response = client.get(link, follow=True)
+
+    assert response.context["validlink"] is valid
+
+
+def test_password_reset_timeout_defaults_to_an_hour(settings):
+    assert settings.PASSWORD_RESET_TIMEOUT == 60 * 60
+
+
+def test_password_reset_timeout_reads_from_env():
+    script = (
+        "import django; django.setup();"
+        "from django.conf import settings;"
+        "print(settings.PASSWORD_RESET_TIMEOUT)"
+    )
+    environment = {
+        **os.environ,
+        "DJANGO_SETTINGS_MODULE": "config.settings",
+        "PASSWORD_RESET_TIMEOUT": "120",
+    }
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert result.stdout.strip() == "120"
 
 
 # --- Navbar -------------------------------------------------------------------

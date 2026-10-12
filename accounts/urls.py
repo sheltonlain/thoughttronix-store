@@ -14,6 +14,26 @@ urlpatterns = [
         views.ChangePasswordView.as_view(),
         name="password_change",
     ),
+    path(
+        "password-reset/",
+        views.ResetPasswordView.as_view(),
+        name="password_reset",
+    ),
+    path(
+        "password-reset/sent/",
+        views.ResetPasswordDoneView.as_view(),
+        name="password_reset_done",
+    ),
+    path(
+        "reset/<uidb64>/<token>/",
+        views.ResetPasswordConfirmView.as_view(),
+        name="password_reset_confirm",
+    ),
+    path(
+        "reset/done/",
+        views.ResetPasswordCompleteView.as_view(),
+        name="password_reset_complete",
+    ),
     path("addresses/", views.AddressListView.as_view(), name="addresses"),
     path("addresses/add/", views.AddressCreateView.as_view(), name="address_add"),
     path(

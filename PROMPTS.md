@@ -28,6 +28,84 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security Phase 3: forgot password
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 3"
+2. "How can I manually verify this phase in the browser?"
+3. "When I visit the password reset link from step 2, I land on a page
+   saying that the link does not work because The reset link is invalid,
+   has expired, or has already been used."
+4. "No, update PROMPTS.md with the standard prompt."
+
+### Summary
+
+- **Outcome:**
+  - **Forms:** `ResetPasswordForm` (Django's `PasswordResetForm`) narrows
+    `get_users` to accounts with `email_verified_at` set. Django already
+    matches case-insensitively and skips inactive accounts and unusable
+    passwords. `SetNewPasswordForm` is Django's `SetPasswordForm` in
+    DaisyUI. Both are in `accounts/forms.py`.
+  - **Views and URLs:** thin subclasses of Django's four reset views at
+    `password-reset/`, `password-reset/sent/`, `reset/<uidb64>/<token>/`,
+    and `reset/done/`, named under `accounts:`. The confirm view sends
+    "Your password was reset" through the Phase 2
+    `User.send_security_alert`. The customer signs in themselves
+    afterwards.
+  - **Templates:** four DaisyUI pages in `templates/accounts/`, each
+    with at most one `btn-primary`. The confirm page's invalid-link state
+    links to a new request. The reset email body and subject are
+    plain-text templates in `templates/accounts/email/`. The sign-in page
+    gained a "Forgot password?" link.
+  - **Settings:** `PASSWORD_RESET_TIMEOUT` is read from `.env` with a
+    one-hour default.
+  - **Tests:** 14 new in `accounts/test_security.py`:
+    - the sign-in page link
+    - exact and different-capitals verified emails each get a link
+    - unverified, unknown, inactive, and unusable-password accounts get no
+      mail and the same redirect, run as one parametrized test
+    - the full reset, with the alert and signing in with the new password
+    - the password validators
+    - a link works only once
+    - a link still works at 59 minutes and fails after one hour, with time
+      controlled by monkeypatching `PasswordResetTokenGenerator._now`
+    - the default timeout, and an env override checked in a subprocess
+
+    Suite green at 373 passed, ruff clean.
+  - **Plan:** Phase 3's acceptance criteria are ticked in
+    `plans/account-security.md`.
+  - **Manual check:** I gave browser steps for each criterion using the
+    seeded accounts:
+    - `customer` for the happy path
+    - `mwren` for an unusable password
+    - the admin to unverify and deactivate an account
+    - a temporary `.env` with `PASSWORD_RESET_TIMEOUT=60` for expiry and
+      the env override
+  - **Still to do:** nothing is committed.
+- **Deviations:**
+  - The user asked a follow-up about verifying the phase by hand.
+  - I offered a small development email backend that prints decoded
+    bodies, so links copy whole from the terminal. The user declined, so
+    the console backend stays as the PRD says. Links must be rejoined by
+    hand when they wrap.
+- **Sideways:**
+  - The reset link copied from the terminal showed "This link doesn't
+    work". I reproduced the raw email. The URL is about 80 characters long,
+    so the email went out quoted-printable, and the console backend printed
+    the link split across two lines with a trailing `=`. The copied link was
+    therefore truncated. The token and code were fine. The workaround is to
+    delete the `=` and join the two lines. The tests missed this because
+    they read the decoded `message.body`. Phases 4 and 6 send links just as
+    long, so the same thing will happen there.
+  - Two tests are fragile, and I flagged both:
+    - the expiry test patches Django's private
+      `PasswordResetTokenGenerator._now`
+    - the default-timeout test would fail if a local `.env` set
+      `PASSWORD_RESET_TIMEOUT`
+  - Running the full suite took longer than the two-minute tool timeout,
+    so it finished in the background, and it passed.
+
 ## 2026-10-11 — Account security Phase 2: password change and security alerts
 
 ### Prompts
