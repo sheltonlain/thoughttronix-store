@@ -2,10 +2,15 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.mail import send_mail
 from django.db import models
-from django.db.models import Case, Value, When
+from django.db.models import Case, Q, Value, When
+from django.db.models.functions import Lower
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
+from .tokens import email_verification_token
 from .validators import US_STATES, zip_validator
 
 
@@ -42,6 +47,18 @@ class User(AbstractUser):
         related_name="+",
     )
 
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            # Two accounts never share an email, whatever its capitalization.
+            # Blank stays allowed, and blanks don't collide with each other.
+            models.UniqueConstraint(
+                Lower("email"),
+                condition=~Q(email=""),
+                name="accounts_user_email_ci_unique",
+                violation_error_message="That email address is already in use.",
+            ),
+        ]
+
     def set_default_address(self, kind, address):
         """Make ``address`` the default for ``kind`` ("shipping" or "billing")."""
         field = f"default_{kind}_address"
@@ -71,6 +88,36 @@ class User(AbstractUser):
         """The address alerts and recovery may use: the email, once
         verified. Blank when there is none or it isn't verified yet."""
         return self.email if self.email and self.email_verified_at else ""
+
+    def send_verification_email(self, request):
+        """Email a single-use link that verifies the account's email.
+
+        ``request`` supplies the scheme and host for the absolute link.
+        """
+        path = reverse(
+            "accounts:verify_email",
+            kwargs={
+                "uidb64": urlsafe_base64_encode(force_bytes(self.pk)),
+                "token": email_verification_token.make_token(self),
+            },
+        )
+        body = render_to_string(
+            "accounts/email/verify_email.txt",
+            {"user": self, "link": request.build_absolute_uri(path)},
+        )
+        send_mail("Verify your ThoughtTronix email", body, None, [self.email])
+
+    def verify_email(self, token):
+        """Mark the email verified if ``token`` is a live link for it.
+
+        Returns whether it worked. Verifying changes the token's hash, so
+        the same link never works twice. ``is_active`` is left alone.
+        """
+        if not self.email or not email_verification_token.check_token(self, token):
+            return False
+        self.email_verified_at = timezone.now()
+        self.save(update_fields=["email_verified_at"])
+        return True
 
     def send_security_alert(self, action):
         """Email the verified address that ``action`` just happened.

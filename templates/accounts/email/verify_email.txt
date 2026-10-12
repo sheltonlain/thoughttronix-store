@@ -1,0 +1,16 @@
+{% autoescape off %}Hello {{ user.username }},
+
+Welcome to ThoughtTronix. To verify your email address and finish setting
+up your account, open this link:
+
+{{ link }}
+
+The link works once and expires in three days. Once your email is
+verified, you can sign in.
+
+If you didn't sign up, ignore this email: the address won't be verified
+without this link.
+
+— The ThoughtTronix Store
+Your Thoughts, Our Business.
+{% endautoescape %}

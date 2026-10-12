@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Check your inbox — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="card mx-auto max-w-sm bg-base-100 shadow-md">
+    <div class="card-body">
+      <h1 class="card-title text-2xl">Check your inbox</h1>
+      <p>
+        Your account is created. We've sent a verification link to the email
+        address you gave. Open it to verify your email, then sign in.
+      </p>
+      <p class="text-sm opacity-70">
+        The link expires in three days. Nothing arrived? Check your spam folder.
+      </p>
+      <div class="card-actions mt-2 justify-end">
+        <a href="{% url 'accounts:login' %}" class="btn btn-outline">Go to sign in</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}

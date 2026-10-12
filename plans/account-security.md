@@ -169,17 +169,17 @@ supersedes core-platform story 6.
 
 ### Acceptance criteria
 
-- [ ] Signup without an email fails; an email matching an existing one in
+- [x] Signup without an email fails; an email matching an existing one in
       any capitalization fails with "already in use".
-- [ ] The database rejects a second account with the same email in
+- [x] The database rejects a second account with the same email in
       different capitalization; blank emails still coexist.
-- [ ] Successful signup creates an unverified, active user, sends one
+- [x] Successful signup creates an unverified, active user, sends one
       verification email, and redirects to the "check your inbox" page.
-- [ ] The emailed link verifies the account and redirects to sign-in with
+- [x] The emailed link verifies the account and redirects to sign-in with
       a success message.
-- [ ] Used, tampered, and expired (time controlled) links show the error
+- [x] Used, tampered, and expired (time controlled) links show the error
       page and change nothing.
-- [ ] Existing signup tests are updated to the new form; the suite passes.
+- [x] Existing signup tests are updated to the new form; the suite passes.
 
 ---
 

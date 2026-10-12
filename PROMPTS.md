@@ -28,6 +28,85 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security Phase 4: signup with a verified email
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 4."
+2. "How can I manually verify this phase in the browser?"
+3. "Update PROMPTS.md with the standard prompt."
+
+### Summary
+
+- **Outcome:**
+  - **Tokens:** `accounts/tokens.py` adds `EmailVerificationTokenGenerator`,
+    a subclass of Django's `PasswordResetTokenGenerator`. Its hash covers
+    `email`, `pending_email`, and `email_verified_at`, so a link dies once
+    used. Django's `check_token` hardcodes `PASSWORD_RESET_TIMEOUT`, so the
+    subclass overrides it to check `EMAIL_VERIFICATION_TIMEOUT` instead.
+  - **Model:** `User.send_verification_email(request)` emails the link, and
+    `User.verify_email(token)` sets `email_verified_at` if the token is live.
+    Neither touches `is_active`. A `Meta` constraint makes `Lower("email")`
+    unique for non-blank emails only. Migration
+    `0005_user_email_ci_unique` adds it, and it was applied to
+    `db.sqlite3`. Before adding it I checked the database: 15 users, no
+    emails that clash when case is ignored, and 2 blank ones.
+  - **Form:** `SignupForm` now requires an email, and `clean_email` rejects
+    one already on an account, case-insensitively, with "That email
+    address is already in use." The old "No email" docstring is replaced.
+  - **Views and URLs:**
+    - `SignupView` now sends the verification email and redirects to
+      `signup/sent/`, a "Check your inbox" page. There's no auto-login.
+    - `VerifyEmailView` at `verify/<uidb64>/<token>/` verifies the email
+      and redirects to sign-in with "Email verified — you can now sign in."
+      A bad link renders `verify_email_invalid.html`, which links to
+      sign-in for now. Phase 5 will point it at resend.
+  - **Templates:** `signup_sent.html`, `verify_email_invalid.html`, and the
+    plain-text `email/verify_email.txt`.
+  - **Settings:** `EMAIL_VERIFICATION_TIMEOUT` is read from `.env` with a
+    three-day default. `.env.example` gained commented examples for it and
+    for `PASSWORD_RESET_TIMEOUT`.
+  - **Tests:** the two signup tests in `accounts/tests.py` now post an
+    email and expect the "Check your inbox" redirect. The new
+    `accounts/test_verification.py` covers:
+    - a missing email
+    - a duplicate email, exact and in different capitals
+    - an unverified, active account and the one email it gets
+    - the database constraint, and blank emails coexisting
+    - a link verifying the account
+    - used, tampered-token, unknown-uid, and garbage-uid links
+    - expiry at just under and just over three days, with time controlled
+      by monkeypatching `EmailVerificationTokenGenerator._now`
+    - the default timeout, and an env override checked in a subprocess
+
+    Suite green at 388 passed, ruff clean.
+  - **Plan:** Phase 4's acceptance criteria are ticked in
+    `plans/account-security.md`.
+  - **Manual check:** I gave browser steps for each criterion:
+    - signing up `tester1`–`tester3`
+    - reading links from the console
+    - checking the hub's Verified and Not verified badges
+    - a temporary `.env` with `EMAIL_VERIFICATION_TIMEOUT=60` for expiry
+    - the admin to test the constraint and blank emails coexisting
+  - **Still to do:** nothing is committed. Reseed before committing, so
+    test accounts don't end up in the tracked `db.sqlite3`.
+- **Deviations:**
+  - The user asked a follow-up about verifying the phase by hand.
+  - No recommendations were overridden.
+- **Sideways:**
+  - `ruff format` reformatted `accounts/tokens.py` and `accounts/views.py`
+    after the full suite had passed. The accounts tests were re-run
+    (93 passed) to confirm.
+  - Until Phase 5, unverified accounts can still sign in, which the plan
+    allows. I flagged it.
+  - Verification links wrap in the console with a trailing `=`, the same
+    quoted-printable issue found in Phase 3. The manual steps say to rejoin
+    them.
+  - Like the reset expiry test, the expiry test patches Django's private
+    `_now`.
+  - The default-timeout test would fail if a local `.env` set
+    `EMAIL_VERIFICATION_TIMEOUT`.
+
 ## 2026-10-11 — Account security Phase 3: forgot password
 
 ### Prompts

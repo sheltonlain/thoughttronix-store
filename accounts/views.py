@@ -10,8 +10,10 @@ from django.contrib.auth.views import (
     PasswordResetView,
 )
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
+from django.utils.http import urlsafe_base64_decode
 from django.views import View
 from django.views.generic import (
     CreateView,
@@ -30,20 +32,53 @@ from .forms import (
     SignInForm,
     SignupForm,
 )
-from .models import Address
+from .models import Address, User
 
 
-class SignupView(SuccessMessageMixin, CreateView):
-    """Create a customer account, then hand off to the login page.
+class SignupView(CreateView):
+    """Create an unverified customer account and email it a verification
+    link, then show "check your inbox".
 
-    New users sign in themselves — auto-login after signup is left as a
-    student exercise.
+    New users sign in themselves, after verifying — there's no auto-login
+    after signup or after verification.
     """
 
     form_class = SignupForm
     template_name = "accounts/signup.html"
-    success_url = reverse_lazy("accounts:login")
-    success_message = "Account created — you can now sign in."
+    success_url = reverse_lazy("accounts:signup_sent")
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        self.object.send_verification_email(self.request)
+        return response
+
+
+class SignupSentView(TemplateView):
+    template_name = "accounts/signup_sent.html"
+
+
+class VerifyEmailView(TemplateView):
+    """Verify an email from its emailed link, then send the customer to
+    sign in. A bad, used, or expired link shows the error page instead."""
+
+    template_name = "accounts/verify_email_invalid.html"
+
+    def get(self, request, uidb64, token):
+        try:
+            pk = urlsafe_base64_decode(uidb64).decode()
+            user = User.objects.get(pk=pk)
+        except (
+            TypeError,
+            ValueError,
+            OverflowError,
+            User.DoesNotExist,
+            ValidationError,
+        ):
+            user = None
+        if user is not None and user.verify_email(token):
+            messages.success(request, "Email verified — you can now sign in.")
+            return redirect("accounts:login")
+        return super().get(request)
 
 
 class SignInView(LoginView):

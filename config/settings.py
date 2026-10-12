@@ -109,6 +109,11 @@ LOGOUT_REDIRECT_URL = "products:catalog"
 # Seconds a password reset link stays valid: one hour by default.
 PASSWORD_RESET_TIMEOUT = env.int("PASSWORD_RESET_TIMEOUT", default=60 * 60)
 
+# Seconds an email verification link stays valid: three days by default.
+EMAIL_VERIFICATION_TIMEOUT = env.int(
+    "EMAIL_VERIFICATION_TIMEOUT", default=3 * 24 * 60 * 60
+)
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",

@@ -6,6 +6,12 @@ app_name = "accounts"
 
 urlpatterns = [
     path("signup/", views.SignupView.as_view(), name="signup"),
+    path("signup/sent/", views.SignupSentView.as_view(), name="signup_sent"),
+    path(
+        "verify/<uidb64>/<token>/",
+        views.VerifyEmailView.as_view(),
+        name="verify_email",
+    ),
     path("login/", views.SignInView.as_view(), name="login"),
     path("logout/", views.SignOutView.as_view(), name="logout"),
     path("security/", views.SecurityView.as_view(), name="security"),

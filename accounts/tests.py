@@ -17,6 +17,7 @@ def test_signup_creates_plain_customer(client, db):
         reverse("accounts:signup"),
         {
             "username": "fresh-thinker",
+            "email": "fresh@example.com",
             "password1": "neural-implant-9000",
             "password2": "neural-implant-9000",
         },
@@ -27,10 +28,10 @@ def test_signup_creates_plain_customer(client, db):
     assert not user.is_staff
     assert not user.is_superuser
 
-    # Signup hands off to the login page with a confirmation message;
-    # auto-login is a student exercise, so the visitor is still anonymous.
-    assert response.redirect_chain[-1][0] == reverse("accounts:login")
-    assert "Account created" in response.content.decode()
+    # Signup hands off to "check your inbox"; there's no auto-login, so
+    # the visitor is still anonymous.
+    assert response.redirect_chain[-1][0] == reverse("accounts:signup_sent")
+    assert "Check your inbox" in response.content.decode()
     assert not response.context["user"].is_authenticated
 
 
@@ -39,6 +40,7 @@ def test_signup_password_mismatch_shows_field_error(client, db):
         reverse("accounts:signup"),
         {
             "username": "fresh-thinker",
+            "email": "fresh@example.com",
             "password1": "neural-implant-9000",
             "password2": "neural-implant-9001",
         },
