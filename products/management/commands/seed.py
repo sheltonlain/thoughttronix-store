@@ -664,10 +664,13 @@ class Command(BaseCommand):
 
     def _create_users(self):
         User = get_user_model()
+        # Every seeded email is pre-verified, so the demo logins just work.
+        verified_at = timezone.now()
         for username, password, email, first, last, staff, superuser, job in DEMO_USERS:
             user = User(
                 username=username,
                 email=email,
+                email_verified_at=verified_at,
                 first_name=first,
                 last_name=last,
                 is_staff=staff,
@@ -687,6 +690,7 @@ class Command(BaseCommand):
             user = User(
                 username=username,
                 email=f"{username}@example.com",
+                email_verified_at=verified_at,
                 first_name=first,
                 last_name=last,
             )

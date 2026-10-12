@@ -16,6 +16,12 @@ class User(AbstractUser):
     # Nullable per the PRD: an absent job title is unknown, not empty.
     job_title = models.CharField(max_length=150, null=True, blank=True)  # noqa: DJ001
 
+    # Null means "not verified"; a timestamp records when it was. Separate
+    # from ``is_active``, which only ever means "deactivated by staff".
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    # A requested new address, held here until its link is clicked.
+    pending_email = models.EmailField(blank=True, default="")
+
     # A foreign key holds one value, so "one default of each" needs no
     # further enforcement; deleting the address clears the slot.
     default_shipping_address = models.ForeignKey(

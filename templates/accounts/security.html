@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Security — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <h1 class="text-3xl font-bold">Security</h1>
+  <p class="mt-2 opacity-70">Look after how you sign in and how we reach you.</p>
+
+  <div class="mt-6 grid gap-4 sm:grid-cols-2">
+    <section class="card bg-base-100 shadow-md">
+      <div class="card-body">
+        <h2 class="card-title">Email</h2>
+        {% if user.email %}
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="font-mono">{{ user.email }}</span>
+            {% if user.email_verified_at %}
+              <span class="badge badge-success badge-sm">Verified</span>
+            {% else %}
+              <span class="badge badge-warning badge-sm">Not verified</span>
+            {% endif %}
+          </div>
+          <p class="text-sm opacity-70">
+            Password reset links and security alerts go to this address.
+          </p>
+        {% else %}
+          <div class="alert alert-warning" role="alert">
+            <span>
+              No email on file. You can't recover your account if you forget
+              your password until you add an email and verify it.
+            </span>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-md">
+      <div class="card-body">
+        <h2 class="card-title">Password</h2>
+        <p class="opacity-70">Changing your password here is coming soon.</p>
+      </div>
+    </section>
+  </div>
+{% endblock %}

@@ -237,6 +237,8 @@ def test_seed_builds_the_demo_world(db):
     assert employee.is_staff and not employee.is_superuser
     assert employee.job_title == "Junior Thought Curator"
     assert not customer.is_staff
+    # Every seeded account has a verified email, so the demo logins work.
+    assert not User.objects.filter(email_verified_at__isnull=True).exists()
     assert customer.cart.item_count() == 4
     assert customer.orders.count() == 4
     assert [a.label for a in customer.addresses.order_by("pk")] == ["Home", "Work"]

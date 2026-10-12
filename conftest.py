@@ -53,6 +53,18 @@ def customer(db):
 
 
 @pytest.fixture
+def verified_customer(db):
+    """A customer whose email is on file and verified — unlike ``customer``,
+    who has no email at all."""
+    return get_user_model().objects.create_user(
+        username="verified",
+        password="verified123",
+        email="verified@example.com",
+        email_verified_at=timezone.now(),
+    )
+
+
+@pytest.fixture
 def staff_user(db):
     return get_user_model().objects.create_user(
         username="employee",

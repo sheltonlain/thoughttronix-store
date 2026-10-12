@@ -13,14 +13,22 @@ class UserAdmin(DjangoUserAdmin):
             {
                 "fields": (
                     "job_title",
+                    "email_verified_at",
+                    "pending_email",
                     "default_shipping_address",
                     "default_billing_address",
                 )
             },
         ),
     )
-    # Read-only: an editable dropdown would offer every customer's addresses.
-    readonly_fields = ("default_shipping_address", "default_billing_address")
+    # Read-only: an editable dropdown would offer every customer's addresses,
+    # and verification state belongs to the customer's own email links.
+    readonly_fields = (
+        "email_verified_at",
+        "pending_email",
+        "default_shipping_address",
+        "default_billing_address",
+    )
     list_display = ("username", "email", "job_title", "is_staff")
 
 

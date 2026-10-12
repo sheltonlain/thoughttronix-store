@@ -28,6 +28,172 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security Phase 1: security center hub and grandfathering
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 1."
+2. "How can I manually verify this phase in the browser?"
+3. "update PROMPTS.md with the standard prompt"
+
+### Summary
+
+- **Outcome:**
+  - **Model:** `User` gained `email_verified_at` (nullable timestamp) and
+    `pending_email` (blank by default), in migration
+    `0003_user_email_verification`.
+  - **Grandfathering:** data migration `0004_grandfather_verified_emails`
+    stamps `email_verified_at` on every existing user with an email.
+    Blank-email users stay unverified and blank. Reversing it is a no-op.
+  - **Seed:** demo and background users are created with verified emails.
+  - **Hub:** a login-required `SecurityView` at `/accounts/security/`
+    (`accounts:security`, `templates/accounts/security.html`). The Email
+    card shows the address with a Verified badge, or a "No email on file"
+    recovery warning. The Password card is a placeholder until Phase 2.
+    The page has no `btn-primary`.
+  - **Navbar:** a "Security" link beside "Addresses" for every signed-in
+    user, staff included.
+  - **Admin:** the two new fields are shown read-only on the user page.
+  - **Tests:** a new `verified_customer` fixture in `conftest.py`, and
+    `accounts/test_security.py` covering the login requirement, the
+    verified badge, the no-email warning, the staff view, the navbar link
+    for users and visitors, and a real migration test (migrate back to
+    0003, create users, migrate forward). The seed test now asserts every
+    seeded user is verified. Suite green at 349 passed, ruff clean.
+  - **Plan:** Phase 1's acceptance criteria are ticked in
+    `plans/account-security.md`.
+  - **Manual check:** I gave browser steps for each acceptance criterion:
+    migrate first, then check the grandfathering in the admin before
+    seeding. Then check the hub as `customer`, a fresh signup with no
+    email, and `employee`; the login redirect; the navbar for visitors;
+    and that sign-in is unchanged.
+  - **Still to do:** nothing is committed. 
+- **Deviations:**
+  - The user asked a follow-up about verifying the phase by hand.
+  - No recommendations were overridden.
+- **Sideways:**
+  - Nothing failed.
+  - I didn't migrate `db.sqlite3` because it is the tracked grading
+    snapshot. I flagged this instead, and suggested backing it up or
+    running `git restore db.sqlite3` after testing by hand. *Note - I (the human) made the migrations to manually verify the new updates.
+  - The PRD's pending-email display and "change email" link were left for
+    Phase 6, where the plan places them.
+
+## 2026-10-11 — Account security PRD: email change requires the current password
+
+### Prompts
+
+1. "Please make it so that changing the email will also require the
+   current password. Add this to prd/account-security.md"
+2. "Please add this new discussion to PROMPTS.md"
+
+### Summary
+
+- **Outcome:**
+  - **Decision recorded.** The previous entry left open whether changing
+    the email requires the current password. It now does.
+  - **PRD updated (`prd/account-security.md`):**
+    - User story 18 now has the customer enter their current password
+      along with the new address.
+    - The "Email change" implementation decision says the password is
+      checked the same way Django's password change form checks it. A
+      wrong password is a form error, and nothing is saved or sent.
+    - The "Assumption to confirm" item was removed from Further Notes.
+  - **Still to do:** nothing is committed, and no code has changed.
+- **Deviations:** none. The user confirmed the option I had recommended
+  but that was never formally decided.
+- **Sideways:**
+  - I did not edit the previous entry, which still lists this as
+    undecided, because past entries are never rewritten.
+  - This discussion is logged as a separate entry under the same date.
+
+## 2026-10-11 — Account security center: grilled the design and wrote the PRD
+
+### Prompts
+
+1. "/grill-me We need to expand account security features through an
+   account security center. Customers need to provide an email address
+   when they create their account, the ability to change their passwords,
+   and the ability to reset their passwords using their email address.
+   Please also suggest one or two security features you think our web
+   application would benefit from, and we will consider implementing them.
+   Any other features must fit in with the security requirements listed
+   and fit in with the design of our exisiting code base."
+   — Q1 (are emails unique?): "Unique, case-insensitive" (my
+   recommendation).
+2. (Chose to clarify Q2, how to handle existing accounts with no email)
+   "Why do you recommend option 1 over the others?"
+   — then answered Q2: "Allow blank, prompt in center" (my
+   recommendation).
+3. (Chose to clarify Q3, how customers change their email) "Why do you
+   recommend option 1 over option 2?"
+4. (Interrupted my re-asked Q3) "Can we make it so that users have to
+   verify their email upon signup and also have to verify their email
+   when they reset it?"
+   — then answered Q4–Q10, each with my recommendation:
+   - Q4: unverified accounts cannot sign in.
+   - Q5: grandfather existing accounts as verified.
+   - Q6: build on Django's built-ins, not django-allauth.
+   - Q7: record verification in an `email_verified_at` timestamp.
+   - Q8: 1-hour reset links and 3-day verification links.
+   - Q9: a hub page with separate form pages.
+   - Q10: reset goes only to verified emails.
+
+   Q11 (which extra features?): picked "Security alert emails" only.
+5. "/to-prd"
+6. "Append a session log to PROMPTS.md at the repo root, under today's
+   date, newest entry at the top. Record every prompt I gave you this
+   session, in order, including any corrections. End the entry with a
+   short summary: the outcome, any places where I deviated from a
+   recommended answer or asked follow-up questions, and anything that
+   went sideways."
+
+### Summary
+
+- **Outcome:**
+  - **Design settled in an 11-question grilling.** Signup requires a
+    unique, case-insensitive email, and the customer must verify it before
+    signing in. Changing the email also needs verification: it is held in
+    `pending_email`, and the old address stays in force until then.
+    Verification is recorded in a new `email_verified_at` field and
+    enforced in `SignInForm.confirm_login_allowed`. `is_active` keeps
+    meaning "deactivated by staff" only.
+  - **Existing accounts:** those with emails are grandfathered as
+    verified, and the one blank-email account is prompted, not forced.
+  - **Pages and links:** Django's built-in password change and reset
+    views; a `/accounts/security/` hub with separate form pages; 1-hour
+    reset and 3-day verification links, both set from `.env`; neutral
+    resend and reset forms; reset only to verified emails.
+  - **Extra feature:** security alert emails on password change, password
+    reset, and email-change requests.
+  - **PRD:** written to `prd/account-security.md` with 32 user stories.
+    Not committed. No code changed.
+- **Deviations:**
+  - **Follow-up questions:** asked why I recommended option 1 on Q2 and
+    on Q3. On Q2 the user then took the recommendation.
+  - **Q3 overridden:** I recommended confirming the current password with
+    no email verification, and offered verification as a later extra.
+    The user instead asked for verification at both signup and email
+    change. That reshaped the rest of the interview (Q4–Q8 exist because
+    of it).
+  - **Q11, one of two recommended extras:** picked security alert emails;
+    declined sign-in throttling and recent sign-in activity.
+- **Sideways:**
+  - **Wrong claim about the cart:** in Q4 I said the cart works without
+    an account. Checking `orders/views.py` showed the cart and checkout
+    require login, so I corrected it right after the answer. An
+    unverified customer can only browse the catalog. The answer stood.
+  - **Option walked back:** the Q6 option text suggested `is_active=False`
+    for unverified accounts. I withdrew that in Q7, because a verification
+    link would then undo a staff ban.
+  - **Interpretation:** "verify their email when they reset it" was read
+    as *changing* the email, since password reset already proves email
+    ownership. The user didn't confirm or correct this.
+  - **Undecided requirement:** whether the email-change form requires the
+    current password was never decided, because the Q3 re-ask was
+    interrupted. The PRD includes it and flags it as an assumption to
+    confirm.
+
 ## 2026-10-04 — Product images: implemented from the handoff, verified, and shipped
 
 ### Prompts
