@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}This link doesn't work — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <div class="card mx-auto max-w-md bg-base-100 shadow-md">
+    <div class="card-body">
+      <h1 class="card-title text-2xl">This link doesn't work</h1>
+      <div class="alert alert-error" role="alert">
+        <span>
+          The email change link is invalid, has expired, has already been
+          used, or was replaced by a newer request.
+        </span>
+      </div>
+      <p class="text-sm opacity-70">
+        Your email hasn't changed. Request the change again to get a new link.
+      </p>
+      <div class="card-actions mt-2 justify-end">
+        <a href="{% url 'accounts:security' %}" class="btn btn-ghost">Go to security</a>
+        <a href="{% url 'accounts:email_change' %}" class="btn btn-primary">Change email</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}

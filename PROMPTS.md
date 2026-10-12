@@ -28,6 +28,78 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security Phase 6: email change
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 6"
+2. (Rejected the first `CLAUDE.md` edit) "Can you shorten the summaryy down
+   to one line? We do not want verbose explanations in our CLAUDE.md file."
+3. "How can I manually verify this phase in the browser?"
+4. "Update PROMPTS.md with the standard prompt"
+
+### Summary
+
+- **Outcome:**
+  - **Model:** `User.request_email_change(new_email, request)` stores
+    `pending_email`, emails a confirmation link to the new address, and
+    sends the alert "An email change was requested" to the current
+    verified address, if there is one.
+    `User.confirm_email_change(token)` re-checks that no other account
+    holds the address. It then moves `pending_email` into `email` and sets
+    `email_verified_at`. If the address was taken, it raises
+    `ValidationError` and clears the pending change. A shared
+    `_verification_link` helper now builds both kinds of link.
+  - **Form:** `ChangeEmailForm` asks for the new email and the current
+    password. The password is checked the way Django's
+    `PasswordChangeForm` checks it. The form rejects an unchanged address
+    or one already in use, ignoring capitalization.
+  - **Views and URLs:** `ChangeEmailView` (login required) is at
+    `security/email/`. `ConfirmEmailChangeView` is at
+    `security/email/confirm/<uidb64>/<token>/` and needs no sign-in.
+    `LinkUserMixin` now holds the uid decoding that `VerifyEmailView` had
+    inline, and both views use it.
+  - **Templates:** `email_change.html` (title reads "Add an email" for
+    blank-email accounts), `email_change_invalid.html`, and
+    `email/confirm_email_change.txt`. The hub's Email card now shows the
+    pending change and a "Change email" / "Add an email" button.
+  - **Change to Phase 4 code:** `verify_email` now refuses an account
+    whose email is already verified, so an email-change link can't be used
+    up on the signup `/verify/` URL.
+  - **Tests:** a new `accounts/test_email_change.py` with 19 tests:
+    - login required, and the hub links to the change page
+    - a wrong password, an unchanged address, or a taken address (exact
+      and any capitalization) saves and sends nothing
+    - a valid request sets the pending change and emails both addresses
+    - password reset still goes to the old address while a change is
+      pending
+    - confirming swaps the address in, also when signed out
+    - a used, replaced, or tampered link shows the error page
+    - the link expires after three days (time controlled)
+    - an address taken before confirming is refused
+    - an email-change link can't be spent as signup verification
+    - a blank-email account adds an email with no alert
+
+    Suite green at 418 passed, ruff clean.
+  - **Docs:** `CLAUDE.md`'s `accounts/` line is now one line. Phase 6's
+    acceptance criteria are ticked in `plans/account-security.md`.
+  - **Manual check:** I gave seven browser steps as `customer`. They use
+    the seeded `mwren` account for the "taken" cases and the admin to clear
+    an email and to take an address before confirming.
+  - **Still to do:** nothing is committed. Reseed before committing.
+- **Deviations:**
+  - The user rejected my first, multi-line `CLAUDE.md` description of
+    `accounts/` and asked for one line. My plan-ticking command was
+    rejected along with it, and I redid it afterwards as a plain edit.
+  - The user asked a follow-up about verifying the phase by hand.
+- **Sideways:**
+  - No test failures. `ruff format` reflowed only the new test file.
+  - Two decisions were flagged to the user for review, not asked about:
+    - clearing the pending change when the address is taken
+    - leaving a true simultaneous-confirmation race to the database
+      constraint, which would give a server error rather than a friendly
+      message
+
 ## 2026-10-11 — Account security Phase 5: sign-in block and resend verification
 
 ### Prompts

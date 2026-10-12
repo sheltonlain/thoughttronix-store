@@ -16,8 +16,7 @@ A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platfo
 ## Project layout
 
 - `config/` — the project package (settings, root urls)
-- `accounts/` — custom user model (`accounts.User`, `AbstractUser` + nullable
-  `job_title`)
+- `accounts/` — custom user model (`accounts.User`), signup and email verification, the address book, and the security center
 - `products/` — catalog (`Category`, `Product`, `Tag`), its back-office CRUD,
   and the `seed` command
 - `orders/` — cart, checkout, orders, and back-office order management

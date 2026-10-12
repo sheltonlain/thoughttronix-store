@@ -239,19 +239,19 @@ now contains.
 
 ### Acceptance criteria
 
-- [ ] A wrong password, an unchanged address, or an address held by another
+- [x] A wrong password, an unchanged address, or an address held by another
       account (any capitalization) is a form error: nothing is saved and
       nothing is sent.
-- [ ] A valid request sets `pending_email`, emails the new address a link,
+- [x] A valid request sets `pending_email`, emails the new address a link,
       emails the old address an alert, and the hub shows the pending
       change.
-- [ ] While the change is pending, password reset still goes to the old
+- [x] While the change is pending, password reset still goes to the old
       address.
-- [ ] A second request supersedes the first; the first link no longer
+- [x] A second request supersedes the first; the first link no longer
       works.
-- [ ] Confirming swaps the address in and marks it verified; reusing the
+- [x] Confirming swaps the address in and marks it verified; reusing the
       link fails.
-- [ ] If another account claims the address between the request and its
+- [x] If another account claims the address between the request and its
       confirmation, the confirmation is refused and the email is unchanged.
-- [ ] A blank-email user can add an email this way, and no alert is sent.
-- [ ] `CLAUDE.md` is updated.
+- [x] A blank-email user can add an email this way, and no alert is sent.
+- [x] `CLAUDE.md` is updated.

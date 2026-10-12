@@ -97,6 +97,52 @@ class ChangePasswordForm(PasswordChangeForm):
             field.widget.attrs["class"] = "input w-full"
 
 
+class ChangeEmailForm(forms.Form):
+    """Request a new email address, confirmed with the current password.
+
+    The password stops anyone at an unattended signed-in session from
+    redirecting the account's recovery. The address must differ from the
+    current one and belong to no other account, ignoring capitalization.
+    """
+
+    email = forms.EmailField(
+        label="New email",
+        widget=forms.EmailInput(attrs={"autocomplete": "email"}),
+    )
+    password = forms.CharField(
+        label="Current password",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
+
+    def clean_email(self):
+        email = User.objects.normalize_email(self.cleaned_data["email"])
+        if email.lower() == self.user.email.lower():
+            raise forms.ValidationError("That's already your email address.")
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("That email address is already in use.")
+        return email
+
+    def clean_password(self):
+        # Checked the way Django's PasswordChangeForm checks the old one.
+        password = self.cleaned_data["password"]
+        if not self.user.check_password(password):
+            raise forms.ValidationError(
+                "Your password was entered incorrectly. Please enter it again.",
+                code="password_incorrect",
+            )
+        return password
+
+    def save(self, request):
+        self.user.request_email_change(self.cleaned_data["email"], request)
+
+
 class ResetPasswordForm(PasswordResetForm):
     """Django's reset request form, limited to verified emails.
 

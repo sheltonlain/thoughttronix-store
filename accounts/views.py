@@ -27,6 +27,7 @@ from django.views.generic.detail import SingleObjectMixin
 
 from .forms import (
     AddressForm,
+    ChangeEmailForm,
     ChangePasswordForm,
     ResendVerificationForm,
     ResetPasswordForm,
@@ -59,16 +60,15 @@ class SignupSentView(TemplateView):
     template_name = "accounts/signup_sent.html"
 
 
-class VerifyEmailView(TemplateView):
-    """Verify an email from its emailed link, then send the customer to
-    sign in. A bad, used, or expired link shows the error page instead."""
+class LinkUserMixin:
+    """Find the user an emailed link's base64 id names, as Django's reset
+    view does."""
 
-    template_name = "accounts/verify_email_invalid.html"
-
-    def get(self, request, uidb64, token):
+    def get_link_user(self, uidb64):
+        """The user ``uidb64`` names, or None if it names nobody."""
         try:
             pk = urlsafe_base64_decode(uidb64).decode()
-            user = User.objects.get(pk=pk)
+            return User.objects.get(pk=pk)
         except (
             TypeError,
             ValueError,
@@ -76,7 +76,17 @@ class VerifyEmailView(TemplateView):
             User.DoesNotExist,
             ValidationError,
         ):
-            user = None
+            return None
+
+
+class VerifyEmailView(LinkUserMixin, TemplateView):
+    """Verify an email from its emailed link, then send the customer to
+    sign in. A bad, used, or expired link shows the error page instead."""
+
+    template_name = "accounts/verify_email_invalid.html"
+
+    def get(self, request, uidb64, token):
+        user = self.get_link_user(uidb64)
         if user is not None and user.verify_email(token):
             messages.success(request, "Email verified — you can now sign in.")
             return redirect("accounts:login")
@@ -140,6 +150,46 @@ class ChangePasswordView(SuccessMessageMixin, PasswordChangeView):
         response = super().form_valid(form)
         self.request.user.send_security_alert("Your password was changed")
         return response
+
+
+class ChangeEmailView(LoginRequiredMixin, SuccessMessageMixin, FormView):
+    """Request a new email address. It takes effect only once the link
+    sent to it is clicked; the current address is alerted meanwhile."""
+
+    form_class = ChangeEmailForm
+    template_name = "accounts/email_change.html"
+    success_url = reverse_lazy("accounts:security")
+    success_message = (
+        "Check your new inbox: we've sent a link to %(email)s. Your current "
+        "email stays in effect until you click it."
+    )
+
+    def get_form_kwargs(self):
+        return {**super().get_form_kwargs(), "user": self.request.user}
+
+    def form_valid(self, form):
+        form.save(self.request)
+        return super().form_valid(form)
+
+
+class ConfirmEmailChangeView(LinkUserMixin, TemplateView):
+    """Swap in a new email from its emailed link. No sign-in needed: the
+    link may be opened on another device. A bad, used, superseded, or
+    expired link shows the error page instead."""
+
+    template_name = "accounts/email_change_invalid.html"
+
+    def get(self, request, uidb64, token):
+        user = self.get_link_user(uidb64)
+        try:
+            changed = user is not None and user.confirm_email_change(token)
+        except ValidationError as error:
+            messages.error(request, error.messages[0])
+            return redirect("accounts:security")
+        if changed:
+            messages.success(request, f"Your email is now {user.email}.")
+            return redirect("accounts:security")
+        return super().get(request)
 
 
 # --- Forgot password -----------------------------------------------------------

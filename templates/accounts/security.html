@@ -30,6 +30,19 @@
             </span>
           </div>
         {% endif %}
+        {% if user.pending_email %}
+          <div class="alert alert-info" role="status">
+            <span>
+              Change to <span class="font-mono">{{ user.pending_email }}</span>
+              pending — check that inbox for the confirmation link.
+            </span>
+          </div>
+        {% endif %}
+        <div class="card-actions mt-2 justify-end">
+          <a href="{% url 'accounts:email_change' %}" class="btn btn-outline btn-sm">
+            {% if user.email %}Change email{% else %}Add an email{% endif %}
+          </a>
+        </div>
       </div>
     </section>
 

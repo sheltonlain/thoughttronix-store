@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.db import models
 from django.db.models import Case, Q, Value, When
@@ -89,21 +90,28 @@ class User(AbstractUser):
         verified. Blank when there is none or it isn't verified yet."""
         return self.email if self.email and self.email_verified_at else ""
 
-    def send_verification_email(self, request):
-        """Email a single-use link that verifies the account's email.
+    def _verification_link(self, request, url_name):
+        """An absolute, single-use verification link to ``url_name``.
 
-        ``request`` supplies the scheme and host for the absolute link.
+        ``request`` supplies the scheme and host.
         """
         path = reverse(
-            "accounts:verify_email",
+            url_name,
             kwargs={
                 "uidb64": urlsafe_base64_encode(force_bytes(self.pk)),
                 "token": email_verification_token.make_token(self),
             },
         )
+        return request.build_absolute_uri(path)
+
+    def send_verification_email(self, request):
+        """Email a single-use link that verifies the account's email."""
         body = render_to_string(
             "accounts/email/verify_email.txt",
-            {"user": self, "link": request.build_absolute_uri(path)},
+            {
+                "user": self,
+                "link": self._verification_link(request, "accounts:verify_email"),
+            },
         )
         send_mail("Verify your ThoughtTronix email", body, None, [self.email])
 
@@ -111,12 +119,68 @@ class User(AbstractUser):
         """Mark the email verified if ``token`` is a live link for it.
 
         Returns whether it worked. Verifying changes the token's hash, so
-        the same link never works twice. ``is_active`` is left alone.
+        the same link never works twice. An email that's already verified
+        is refused, so an email-change link can't be spent here.
+        ``is_active`` is left alone.
         """
-        if not self.email or not email_verification_token.check_token(self, token):
+        if (
+            not self.email
+            or self.email_verified_at
+            or not email_verification_token.check_token(self, token)
+        ):
             return False
         self.email_verified_at = timezone.now()
         self.save(update_fields=["email_verified_at"])
+        return True
+
+    def request_email_change(self, new_email, request):
+        """Hold ``new_email`` as pending and email it a confirmation link.
+
+        The current email stays in force until the link is clicked. A newer
+        request replaces this one, and changing ``pending_email`` kills
+        this link. The current verified address, if any, is alerted.
+        """
+        self.pending_email = new_email
+        self.save(update_fields=["pending_email"])
+        body = render_to_string(
+            "accounts/email/confirm_email_change.txt",
+            {
+                "user": self,
+                "link": self._verification_link(
+                    request, "accounts:email_change_confirm"
+                ),
+            },
+        )
+        send_mail("Confirm your new ThoughtTronix email", body, None, [new_email])
+        self.send_security_alert("An email change was requested")
+
+    def confirm_email_change(self, token):
+        """Swap the pending email in, verified, if ``token`` is a live link.
+
+        Returns whether the link was good. Raises ``ValidationError`` if
+        another account took the address since it was requested; the
+        pending change is dropped and the email left as it was.
+        """
+        if not self.pending_email or not email_verification_token.check_token(
+            self, token
+        ):
+            return False
+        taken = (
+            User.objects.filter(email__iexact=self.pending_email)
+            .exclude(pk=self.pk)
+            .exists()
+        )
+        if taken:
+            self.pending_email = ""
+            self.save(update_fields=["pending_email"])
+            raise ValidationError(
+                "That email address is now in use by another account, so "
+                "your email wasn't changed.",
+                code="taken",
+            )
+        self.email, self.pending_email = self.pending_email, ""
+        self.email_verified_at = timezone.now()
+        self.save(update_fields=["email", "pending_email", "email_verified_at"])
         return True
 
     def send_security_alert(self, action):

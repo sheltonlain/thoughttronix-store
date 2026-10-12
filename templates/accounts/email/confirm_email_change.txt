@@ -1,0 +1,16 @@
+{% autoescape off %}Hello {{ user.username }},
+
+You asked to change the email on your ThoughtTronix account to
+{{ user.pending_email }}. To confirm the change, open this link:
+
+{{ link }}
+
+The link works once and expires in three days. Until you open it, your
+current email stays in effect.
+
+If you didn't ask for this, ignore this email: the change won't happen
+without this link.
+
+— The ThoughtTronix Store
+Your Thoughts, Our Business.
+{% endautoescape %}
