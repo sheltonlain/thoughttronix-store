@@ -1,7 +1,10 @@
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.core.mail import send_mail
 from django.db import models
 from django.db.models import Case, Value, When
+from django.template.loader import render_to_string
+from django.utils import timezone
 
 from .validators import US_STATES, zip_validator
 
@@ -60,6 +63,35 @@ class User(AbstractUser):
             setattr(self, field, address)
         if empty:
             self.save(update_fields=empty)
+
+    # --- Account security ------------------------------------------------------
+
+    @property
+    def verified_email(self):
+        """The address alerts and recovery may use: the email, once
+        verified. Blank when there is none or it isn't verified yet."""
+        return self.email if self.email and self.email_verified_at else ""
+
+    def send_security_alert(self, action):
+        """Email the verified address that ``action`` just happened.
+
+        ``action`` reads as a sentence fragment, like "Your password was
+        changed". Nothing is sent without a verified address. Returns
+        whether an alert went out.
+        """
+        if not self.verified_email:
+            return False
+        body = render_to_string(
+            "accounts/email/security_alert.txt",
+            {"user": self, "action": action, "when": timezone.now()},
+        )
+        send_mail(
+            f"Security alert: {action}",
+            body,
+            None,  # DEFAULT_FROM_EMAIL
+            [self.verified_email],
+        )
+        return True
 
 
 class AddressQuerySet(models.QuerySet):

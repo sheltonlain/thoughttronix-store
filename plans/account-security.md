@@ -105,17 +105,17 @@ email templates and the `User` alert method that later phases reuse.
 
 ### Acceptance criteria
 
-- [ ] A wrong current password, mismatched new passwords, or a password
+- [x] A wrong current password, mismatched new passwords, or a password
       that fails the validators is shown as a form error, with no change
       and no email.
-- [ ] Success redirects to the hub with a flash message; the user stays
+- [x] Success redirects to the hub with a flash message; the user stays
       signed in.
-- [ ] After a change, another client's session for the same user is signed
+- [x] After a change, another client's session for the same user is signed
       out.
-- [ ] One alert email goes to the verified address, naming the action and
+- [x] One alert email goes to the verified address, naming the action and
       the time and telling the customer to reset their password if the
       change wasn't theirs.
-- [ ] A blank-email user can change their password, and no email is sent.
+- [x] A blank-email user can change their password, and no email is sent.
 
 ---
 

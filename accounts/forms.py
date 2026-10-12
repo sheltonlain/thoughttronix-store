@@ -1,5 +1,9 @@
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    PasswordChangeForm,
+    UserCreationForm,
+)
 
 from .models import Address, User
 
@@ -22,6 +26,16 @@ class SignupForm(UserCreationForm):
 
 class SignInForm(AuthenticationForm):
     """The stock authentication form, dressed in DaisyUI."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "input w-full"
+
+
+class ChangePasswordForm(PasswordChangeForm):
+    """Django's password change form — current password, then the new one
+    twice, checked by the store's password validators — in DaisyUI."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

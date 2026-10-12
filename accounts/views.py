@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages.views import SuccessMessageMixin
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
@@ -14,7 +14,7 @@ from django.views.generic import (
 )
 from django.views.generic.detail import SingleObjectMixin
 
-from .forms import AddressForm, SignInForm, SignupForm
+from .forms import AddressForm, ChangePasswordForm, SignInForm, SignupForm
 from .models import Address
 
 
@@ -53,6 +53,24 @@ class SecurityView(LoginRequiredMixin, TemplateView):
     own card. The same page for customers and staff."""
 
     template_name = "accounts/security.html"
+
+
+class ChangePasswordView(SuccessMessageMixin, PasswordChangeView):
+    """Change the password, then alert the verified address.
+
+    Django's view keeps this session signed in and, because the session
+    hash changes with the password, signs out every other session.
+    """
+
+    form_class = ChangePasswordForm
+    template_name = "accounts/password_change.html"
+    success_url = reverse_lazy("accounts:security")
+    success_message = "Password changed. Your other sessions have been signed out."
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        self.request.user.send_security_alert("Your password was changed")
+        return response
 
 
 # --- The address book --------------------------------------------------------

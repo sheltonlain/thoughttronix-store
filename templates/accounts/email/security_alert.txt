@@ -1,0 +1,14 @@
+{% autoescape off %}Hello {{ user.username }},
+
+{{ action }} on your ThoughtTronix account.
+
+When: {{ when|date:"j F Y, H:i T" }}
+
+If this was you, there's nothing more to do.
+
+If this wasn't you, reset your password right away: someone else may have
+access to your account.
+
+— The ThoughtTronix Store
+Your Thoughts, Our Business.
+{% endautoescape %}

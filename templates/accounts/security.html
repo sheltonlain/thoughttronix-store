@@ -36,7 +36,15 @@
     <section class="card bg-base-100 shadow-md">
       <div class="card-body">
         <h2 class="card-title">Password</h2>
-        <p class="opacity-70">Changing your password here is coming soon.</p>
+        <p class="text-sm opacity-70">
+          Changing it signs you out everywhere else, and we'll email your
+          verified address to let you know.
+        </p>
+        <div class="card-actions mt-2 justify-end">
+          <a href="{% url 'accounts:password_change' %}" class="btn btn-outline btn-sm">
+            Change password
+          </a>
+        </div>
       </div>
     </section>
   </div>

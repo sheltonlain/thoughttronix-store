@@ -9,6 +9,11 @@ urlpatterns = [
     path("login/", views.SignInView.as_view(), name="login"),
     path("logout/", views.SignOutView.as_view(), name="logout"),
     path("security/", views.SecurityView.as_view(), name="security"),
+    path(
+        "security/password/",
+        views.ChangePasswordView.as_view(),
+        name="password_change",
+    ),
     path("addresses/", views.AddressListView.as_view(), name="addresses"),
     path("addresses/add/", views.AddressCreateView.as_view(), name="address_add"),
     path(

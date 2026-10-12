@@ -28,6 +28,74 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security Phase 2: password change and security alerts
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 2."
+2. "How can I manually verify this phase in the browser?"
+3. "pdate PROMPTS.md with the standard prompt"
+
+### Summary
+
+- **Outcome:**
+  - **Alerts:** `User.send_security_alert(action)` emails the verified
+    address from the plain-text template
+    `templates/accounts/email/security_alert.txt`. The email names the
+    action, gives the time, and says to reset the password if it wasn't
+    you. It sends nothing if there is no verified address. A
+    `verified_email` property backs it. Phases 3 and 6 can reuse both.
+  - **Password change:** `ChangePasswordView` (Django's
+    `PasswordChangeView` plus `SuccessMessageMixin`) is at
+    `/accounts/security/password/` (`accounts:password_change`). It uses
+    `ChangePasswordForm`, Django's `PasswordChangeForm` with DaisyUI
+    classes, and the template `templates/accounts/password_change.html`.
+    On success it redirects to the hub with a flash message and sends the
+    alert. Keeping this session and signing out the others is Django's
+    built-in behavior; it isn't reimplemented.
+  - **Hub:** the Password card's placeholder became a "Change password"
+    button styled `btn-outline`, so the hub still has no `btn-primary`.
+  - **Settings:** `DEFAULT_FROM_EMAIL` is read from `.env`, defaulting to
+    `ThoughtTronix <security@thoughttronix.example>`.
+  - **Tests:** added to `accounts/test_security.py`:
+    - the login requirement and the hub's link to the change page
+    - wrong-current, mismatch, and failing-validator inputs, run as one
+      parametrized test; each gives a form error, changes nothing, and
+      sends no mail
+    - success redirects to the hub and keeps the user signed in
+    - a second `Client` is signed out by the change
+    - one alert with the time fixed by monkeypatching `timezone.now`
+    - a blank-email user changes their password and gets no mail
+    - an unverified email gets no alert
+
+    Suite green at 359 passed, ruff clean.
+  - **Plan:** Phase 2's acceptance criteria are ticked in
+    `plans/account-security.md`.
+  - **Manual check:** I gave browser steps for each acceptance criterion:
+    - the three error cases
+    - a successful change as `customer`, with the alert printed by the
+      console email backend
+    - a private window to see the other session signed out
+    - a fresh signup with no email, to see that no alert goes out
+    - the login redirect
+    - restoring the demo password afterwards
+  - **Still to do:** nothing is committed.
+- **Deviations:**
+  - The user asked a follow-up about verifying the phase by hand.
+  - No recommendations were overridden.
+  - `DEFAULT_FROM_EMAIL` was my addition and isn't in the plan. I flagged
+    it for review.
+- **Sideways:**
+  - Nothing failed.
+  - The alert says "reset your password" without a link, because the
+    "Forgot password?" flow arrives in Phase 3. I flagged this so the email
+    can point to that flow later.
+  - The hub button uses a new DaisyUI class, and the compiled CSS is
+    gitignored. I noted that `tailwind build --force` may be needed if the
+    watcher doesn't pick the class up.
+  - My first attempt to insert this entry failed because the text I matched
+    against wasn't in the file. The second attempt worked.
+
 ## 2026-10-11 — Account security Phase 1: security center hub and grandfathering
 
 ### Prompts
