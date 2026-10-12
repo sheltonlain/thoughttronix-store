@@ -12,10 +12,12 @@
         </span>
       </div>
       <p class="text-sm opacity-70">
-        If you've already verified your email, you can sign in.
+        Request a new link below. If you've already verified your email, you
+        can sign in.
       </p>
       <div class="card-actions mt-2 justify-end">
-        <a href="{% url 'accounts:login' %}" class="btn btn-outline">Go to sign in</a>
+        <a href="{% url 'accounts:login' %}" class="btn btn-ghost">Go to sign in</a>
+        <a href="{% url 'accounts:resend_verification' %}" class="btn btn-primary">Send a new link</a>
       </div>
     </div>
   </div>

@@ -28,6 +28,78 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-11 — Account security Phase 5: sign-in block and resend verification
+
+### Prompts
+
+1. "@prd/account-security.md @plans/account-security.md Do Phase 5."
+2. (Rejected a diagnostic command) "Explain what this does"
+3. "Go ahead and run it"
+4. (Rejected the first `docs/ARCHITECTURE.md` edit) "Can you shorten the
+   summary for ARCHITECTURE.md? We do not want it to be extremely verbose."
+5. "How can I manually verify this phase in the browser?"
+6. "pdate PROMPTS.md with the standard prompt"
+
+### Summary
+
+- **Outcome:**
+  - **Sign-in rule:** `SignInForm.confirm_login_allowed` refuses an account
+    that has an email but no `email_verified_at`. Its error has the code
+    `unverified` and a `format_html` link to the resend page. Django only
+    calls the hook after the password checks out, so a wrong password
+    still gets only the normal `invalid_login` error. Blank-email accounts
+    still sign in.
+  - **Resend:** `ResendVerificationForm.save(request)` finds an unverified
+    account by email, case-insensitively, and calls the existing
+    `User.send_verification_email`. `ResendVerificationView` (a
+    `FormView`) at `verify/resend/` always redirects to sign-in with the
+    same neutral flash message. Its template is `resend_verification.html`.
+  - **Links to resend:** `verify_email_invalid.html` now has a "Send a new
+    link" button, its only `btn-primary`, with sign-in demoted to
+    `btn-ghost`. `signup_sent.html` links to resend too.
+  - **Docs:** `docs/ARCHITECTURE.md` gained a short "Email verification"
+    section: `email_verified_at` is the only flag, `is_active` means
+    "deactivated by staff" only, and the sign-in rule.
+  - **Tests:** added to `accounts/test_verification.py`:
+    - verified and blank-email accounts sign in
+    - an unverified account is refused, and the error links to resend
+    - a wrong password shows only `invalid_login`
+    - verifying a deactivated account leaves it inactive and unable to
+      sign in
+    - resend sends one working link to an unverified account (caps
+      ignored) and nothing for verified or unknown addresses
+    - resend's replies are identical with the CSRF token stripped
+    - the bad-link page links to resend
+
+    Suite green at 399 passed, ruff clean.
+  - **Plan:** Phase 5's acceptance criteria are ticked in
+    `plans/account-security.md`.
+  - **Manual check:** I gave browser steps for each criterion:
+    - signing up `tester5` and `tester6`
+    - resend with an unverified, a verified, and an unknown address
+    - clearing an email in the admin to test a blank-email sign-in
+    - deactivating `tester6` before verifying it
+  - **Still to do:** nothing is committed. Reseed before committing, and
+    delete `tester5`/`tester6` in the admin if they're still there.
+- **Deviations:**
+  - The user rejected a diagnostic command until I explained it, then
+    approved it.
+  - The user rejected my first, longer `ARCHITECTURE.md` section, which
+    covered tokens, timeouts, enumeration, and the admin path. The kept
+    version is four lines.
+  - The user asked a follow-up about verifying the phase by hand.
+- **Sideways:**
+  - The "replies the same" test first failed: 3 distinct pages. A
+    throwaway diff test (copied into `accounts/`, then deleted) showed the
+    only difference was the masked CSRF token, which also appears in
+    `base.html`'s `hx-headers` on `<body>`. My regex only stripped the form
+    field. Widening it fixed the test. No real leak.
+  - `ruff format` reflowed the `format_html` string in `accounts/forms.py`
+    after the suite had passed. The full suite was re-run afterwards.
+  - The resend form doesn't skip inactive accounts, matching the PRD's
+    wording. A deactivated, unverified account can still be sent a link,
+    but verifying it doesn't reactivate it.
+
 ## 2026-10-11 — Account security Phase 4: signup with a verified email
 
 ### Prompts

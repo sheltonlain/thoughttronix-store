@@ -15,6 +15,13 @@ Roles are Django's own vocabulary: customers are plain users, employees are
 Marketing is staff holding the `coupons.manage_coupons` permission, granted
 to each user directly.
 
+## Email verification
+
+`User.email_verified_at` (null = unverified) is the only verification flag;
+`is_active` means "deactivated by staff" and nothing else. Sign-in refuses
+an unverified email after the password check; blank-email accounts are
+grandfathered in. Reset and alerts use only the verified address.
+
 ## Media files
 
 Django serves uploaded product images only when `DEBUG` is on; production

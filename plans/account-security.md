@@ -200,17 +200,17 @@ rule that `is_active` means "deactivated by staff" only.
 
 ### Acceptance criteria
 
-- [ ] A verified user signs in; a blank-email user signs in; an unverified
+- [x] A verified user signs in; a blank-email user signs in; an unverified
       user with the correct password is refused with a link to resend.
-- [ ] An unverified user with a wrong password sees only the normal
+- [x] An unverified user with a wrong password sees only the normal
       invalid-credentials error.
-- [ ] Verification never changes `is_active`; a deactivated user stays
+- [x] Verification never changes `is_active`; a deactivated user stays
       unable to sign in after verifying.
-- [ ] Resend sends a new link to an unverified account (matched
+- [x] Resend sends a new link to an unverified account (matched
       case-insensitively) and sends nothing for verified or unknown
       addresses; the response is the same in every case.
-- [ ] The bad-link error page links to resend.
-- [ ] `docs/ARCHITECTURE.md` is updated.
+- [x] The bad-link error page links to resend.
+- [x] `docs/ARCHITECTURE.md` is updated.
 
 ---
 

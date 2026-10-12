@@ -6,6 +6,8 @@ from django.contrib.auth.forms import (
     SetPasswordForm,
     UserCreationForm,
 )
+from django.urls import reverse
+from django.utils.html import format_html
 
 from .models import Address, User
 
@@ -39,12 +41,50 @@ class SignupForm(UserCreationForm):
 
 
 class SignInForm(AuthenticationForm):
-    """The stock authentication form, dressed in DaisyUI."""
+    """The stock authentication form, dressed in DaisyUI, that refuses an
+    account whose email isn't verified yet.
+
+    Django calls ``confirm_login_allowed`` only after the password checks
+    out, so "verify first" is never shown to someone guessing passwords.
+    Blank-email accounts (grandfathered) still sign in.
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs["class"] = "input w-full"
+
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
+        if user.email and not user.email_verified_at:
+            raise forms.ValidationError(
+                format_html(
+                    "Please verify your email before signing in. Lost the link? "
+                    '<a href="{}" class="link">Send a new one</a>.',
+                    reverse("accounts:resend_verification"),
+                ),
+                code="unverified",
+            )
+
+
+class ResendVerificationForm(forms.Form):
+    """Ask for a fresh verification link by email address.
+
+    Sends only to an unverified account with that email, matched
+    case-insensitively, but the view replies the same way regardless, so
+    the form can't be used to find out who has an account.
+    """
+
+    email = forms.EmailField(widget=forms.EmailInput(attrs={"class": "input w-full"}))
+
+    def save(self, request):
+        """Email a new link to the unverified account with this address, if
+        there is one."""
+        user = User.objects.filter(
+            email__iexact=self.cleaned_data["email"], email_verified_at__isnull=True
+        ).first()
+        if user is not None:
+            user.send_verification_email(request)
 
 
 class ChangePasswordForm(PasswordChangeForm):

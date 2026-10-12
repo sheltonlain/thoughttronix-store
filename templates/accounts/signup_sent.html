@@ -11,7 +11,8 @@
         address you gave. Open it to verify your email, then sign in.
       </p>
       <p class="text-sm opacity-70">
-        The link expires in three days. Nothing arrived? Check your spam folder.
+        The link expires in three days. Nothing arrived? Check your spam folder,
+        or <a href="{% url 'accounts:resend_verification' %}" class="link">send a new link</a>.
       </p>
       <div class="card-actions mt-2 justify-end">
         <a href="{% url 'accounts:login' %}" class="btn btn-outline">Go to sign in</a>

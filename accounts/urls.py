@@ -8,6 +8,11 @@ urlpatterns = [
     path("signup/", views.SignupView.as_view(), name="signup"),
     path("signup/sent/", views.SignupSentView.as_view(), name="signup_sent"),
     path(
+        "verify/resend/",
+        views.ResendVerificationView.as_view(),
+        name="resend_verification",
+    ),
+    path(
         "verify/<uidb64>/<token>/",
         views.VerifyEmailView.as_view(),
         name="verify_email",

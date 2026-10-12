@@ -18,6 +18,7 @@ from django.views import View
 from django.views.generic import (
     CreateView,
     DeleteView,
+    FormView,
     ListView,
     TemplateView,
     UpdateView,
@@ -27,6 +28,7 @@ from django.views.generic.detail import SingleObjectMixin
 from .forms import (
     AddressForm,
     ChangePasswordForm,
+    ResendVerificationForm,
     ResetPasswordForm,
     SetNewPasswordForm,
     SignInForm,
@@ -79,6 +81,23 @@ class VerifyEmailView(TemplateView):
             messages.success(request, "Email verified — you can now sign in.")
             return redirect("accounts:login")
         return super().get(request)
+
+
+class ResendVerificationView(SuccessMessageMixin, FormView):
+    """Send a fresh verification link. The reply is the same whether or
+    not an unverified account has that email."""
+
+    form_class = ResendVerificationForm
+    template_name = "accounts/resend_verification.html"
+    success_url = reverse_lazy("accounts:login")
+    success_message = (
+        "If an unverified account has that email, we've sent it a new "
+        "verification link. It expires in three days."
+    )
+
+    def form_valid(self, form):
+        form.save(self.request)
+        return super().form_valid(form)
 
 
 class SignInView(LoginView):
