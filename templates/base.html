@@ -30,6 +30,9 @@
             <a href="{% url 'accounts:security' %}" class="btn btn-ghost btn-sm">Security</a>
             {% include "orders/partials/_cart_badge.html" %}
             <span class="text-sm opacity-70">Hi, {{ user.username }}</span>
+            {% if user.job_title %}
+            <span class="text-sm opacity-70">{{ user.job_title }}</span>
+            {% endif %}
             <form method="post" action="{% url 'accounts:logout' %}">
               {% csrf_token %}
               <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>

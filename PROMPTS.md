@@ -28,6 +28,45 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-17 — Readable console email backend for whole links
+
+### Prompts
+
+1. "Look at PROMPTS.md ## 2026-10-11 — Account security Phase 3: forgot
+   password. The third prompt I gave stated that the password reset link
+   does not work, and you had proposed a fix for this that I originally
+   declined. I would like to implement that fix now."
+2. "Update PROMPTS.md with the standard prompt"
+
+### Summary
+
+- **Outcome:**
+  - **Backend:** `accounts/mail.py` adds `ReadableConsoleEmailBackend`, a
+    subclass of Django's console backend. It prints From, To, Cc (when
+    set), Subject, and the decoded `message.body`, instead of the raw MIME
+    source. Long links no longer go out quoted-printable with a trailing
+    `=`, so reset, verification, and email-change links copy whole from
+    the terminal.
+  - **Settings:** `EMAIL_BACKEND` in `config/settings.py` points at the
+    new backend. Mail is still console-only, as the PRD says.
+  - **Tests:** 2 new in `accounts/test_mail.py`:
+    - the settings module names the new backend (pytest-django swaps in
+      locmem, so the test reads `config.settings` directly)
+    - a real reset email sent through the backend prints its link alone
+      on one line, with no `=` line breaks
+
+    Suite green at 420 passed, ruff clean.
+  - **Still to do:** nothing is committed. The existing uncommitted
+    change to `templates/base.html` was left alone.
+- **Deviations:**
+  - This reverses the Phase 3 decision to keep the stock console backend.
+    The user asked for the fix they had declined then.
+- **Sideways:**
+  - The first ruff format check flagged `accounts/test_mail.py`. I
+    reformatted it, which joined one wrapped line.
+  - The full suite again ran past the two-minute tool timeout. It ran in
+    the background and passed.
+
 ## 2026-10-11 — Account security Phase 6: email change
 
 ### Prompts

@@ -169,9 +169,10 @@ TAILWIND_CLI_VERSION = "2.9.2"
 TAILWIND_CLI_SRC_CSS = "assets/css/source.css"
 
 
-# Email — console backend only; real mail is out of scope for the core.
+# Email — console only; real mail is out of scope for the core. The backend
+# prints decoded bodies so long links copy whole from the terminal.
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = "accounts.mail.ReadableConsoleEmailBackend"
 DEFAULT_FROM_EMAIL = env.str(
     "DEFAULT_FROM_EMAIL", default="ThoughtTronix <security@thoughttronix.example>"
 )
