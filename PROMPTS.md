@@ -28,6 +28,309 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-18 — Wishlist Phase 2: the Wishlist page, three behaviors built test-first
+
+### Prompts
+
+1. `/tdd @prd/wishlist.md @plans/wishlist.md implement phase 2`
+2. "What is your reasoning for selecting these three tests?"
+3. "Approved, go ahead with all three"
+4. (Cycle 1 test shown red) "Approved, make it pass"
+5. "Move to cycle 2"
+6. (Cycle 2 test shown red) "Approved, make it pass"
+7. "Move to cycle 3"
+8. (Cycle 3 test shown red) "Approved, make it pass"
+9. "Yes, go ahead with the rest of phase 2"
+10. "How can I manually verify this phase in the browser?"
+11. "Add a PROMPTS.md entry for this session"
+12. (Rejected a shell command) "What are my other options?"
+13. "1"
+
+### Summary
+
+- **Outcome:**
+  - **TDD selection:** three behaviors, approved after the user asked for
+    the reasoning:
+    - the Wishlist page lists only the requester's items, newest first
+    - another customer's item pk 404s on remove and is left untouched
+    - removing the last item re-renders the contents with the empty state
+  - **Cycle 1:** red on `'Seraphine Home Hub' in page` against a stub page
+    (URL `wishlist:wishlist`, `WishlistView`, empty `wishlist.html`). Made
+    green with `Wishlist.lines()` (mirrors `Cart.lines()`), the view
+    passing `Wishlist.for_user(request.user)`, and a bare
+    `_wishlist_contents.html` loop. I said the scoping and order were
+    really implemented but the rows only satisfied the test.
+  - **Cycle 2:** red on `200 == 404` against a stub
+    `RemoveWishlistItemView` at `wishlist:remove_item` that ignored the pk.
+    Both customers saved the same product, so a product-based "fix" would
+    also fail. Made green with
+    `get_object_or_404(WishlistItem, pk=pk, wishlist__user=request.user)`.
+    The view still didn't delete; I said so and left that for cycle 3.
+  - **Cycle 3:** red because the response was still the item. Made green
+    with `item.delete()` and a designed empty state ("Your wishlist is
+    empty", a "Browse the catalog" link).
+  - **Rest of the phase (normal implementation):**
+    - Full rows: image, linked name, price, Unavailable badge, the
+      unchanged add-to-cart partial, and an HTMX Remove targeting
+      `#wishlist-contents`. `lines()` is evaluated once via `{% with %}`.
+    - Navbar "Wishlist" `btn-ghost btn-sm` link after Orders, signed-in
+      only, with no badge.
+    - Seed: the wipe clears wishlists; `_create_customer_wishlist` saves
+      MindSync Duo, EchoPatch (unavailable), Seraphine (in the cart), and
+      MoodSet, backdated 1/6/13/30 days. The summary line mentions the
+      wishlist.
+  - **Tests:** 3 TDD tests plus 12 more in `wishlist/tests.py` (rows, the
+    unavailable state, cart quantities, add to cart keeps the item, empty
+    page, login and GET rejection on remove, partial re-render, navbar).
+    The seed test in `products/tests.py` checks the demo wishlist, and the
+    idempotency test now counts `WishlistItem`. Full suite green at 471
+    passed, ruff clean.
+  - **Manual check:** I gave browser steps for every acceptance criterion,
+    including a DevTools `fetch` as `employee` to confirm another
+    customer's item 404s.
+  - **Still to do:** nothing is committed. I did not run `seed` against the
+    local `db.sqlite3`. The user hadn't reported back on the browser steps
+    by the end of the session.
+- **Deviations:**
+  - **Follow-up question:** the user asked why I picked the three tests.
+    I said behavior 2 bent the skill's rule against behaviors an existing
+    pattern has settled (the cart's owner-scoped lookup), and offered to
+    drop it. The user kept all three.
+  - **Flagged, not asked about:** the empty state's catalog link is
+    `btn-primary` (as in the cart's), and its tagline is my own copy.
+  - **Log request:** asked for with "Add a PROMPTS.md entry for this
+    session" rather than the standard prompt. The entry follows the
+    standard shape.
+- **Sideways:**
+  - **Full suite past the tool timeout:** the cycle 1 regression run took
+    almost four minutes and finished in the background (457 passed). For
+    cycles 2 and 3, which only touched wishlist code, I ran just
+    `wishlist/tests.py` and said so.
+  - **Formatting:** `ruff format` rewrapped a line in `wishlist/tests.py`
+    after the full suite passed. It was a layout change only.
+  - **Shell command rejected:** to start this entry I ran a PowerShell
+    command to count lines and diff `PROMPTS.md`. The user rejected it
+    and asked for other options, then chose reading and editing with the
+    file tools.
+
+## 2026-10-18 — Wishlist Phase 1: detail-page button, browser-verified, double-click fixed
+
+### Prompts
+
+1. "@prd/wishlist.md @plans/wishlist.md Implement phase 1"
+2. "How can I manually verify this phase in the browser?"
+3. "In 3. Save and remove without a reload (stories 4–6), Step 4 says that
+   the hint should not appear when you load the page again. However, the
+   hint did appear when I tried this step."
+4. "It said Save to wishlist, so it works"
+5. "When I double click the save button, the status toggles back and
+   fourth."
+6. "It works now, double-clicking stays saved"
+7. "run the full test suite"
+8. "Add our session to PROMPTS.md"
+
+### Summary
+
+- **Outcome:**
+  - **New `wishlist` app:** `Wishlist`, one-to-one with the user and
+    created lazily via `for_user`, with `add`, `remove`, and `contains`.
+    `WishlistItem` has a unique wishlist–product constraint, cascades on
+    product and user deletion, and is ordered newest first. The migration
+    is `0001_initial`. The admin shows the items inline, plus an item
+    count. URLs are mounted at `/wishlist/`.
+  - **Endpoints:** `wishlist:add` and `wishlist:remove` are separate
+    (never a toggle), keyed by product pk, POST-only, and require sign-in.
+    Each re-renders the button partial in its new state. Unavailable
+    products can be saved.
+  - **Detail page:** `ProductDetailView` sets `in_wishlist` with one
+    existence check that never creates a wishlist on a GET. The new
+    `templates/wishlist/partials/_wishlist_button.html` has three states:
+    not saved, saved, and a signed-out link whose `next` is rebuilt from
+    the product URL plus `?wishlist=1`. The hint lives inside the swapped
+    wrapper, so it disappears once Save is clicked.
+  - **Choices beyond the plan, flagged to the user:**
+    - `added_at` uses `default=timezone.now` rather than `auto_now_add`,
+      so the Phase 2 seed can backdate saves.
+    - Ordering is `["-added_at", "-pk"]`, so ties sort predictably.
+  - **Tests:** `wishlist/tests.py` covers every Phase 1 acceptance
+    criterion, plus an admin test and a double-click-guard test. The full
+    suite is green at 456 passed, and ruff is clean.
+  - **Still to do:** nothing is committed. `db.sqlite3` (tracked) changed
+    when I ran `migrate`, and the user must decide whether to commit it.
+    Browser checks for stale tabs, EchoPatch, and the admin had not been
+    reported back by the end of the session.
+- **Deviations:**
+  - **Follow-up questions:** the user asked for a browser walkthrough,
+    then reported two problems found while following it (both below).
+  - **Nothing overridden:** no recommendation was rejected. I offered,
+    but did not apply, the double-click guard for the cart's Add to cart
+    button.
+- **Sideways:**
+  - **Bad walkthrough step:** step 4 of "Save and remove" said to check
+    the hint "while the product is saved", but step 3 had just removed
+    it, so the hint correctly appeared. I asked which button label showed.
+    "Save to wishlist" confirmed the code was right and my instructions
+    were wrong. I gave a corrected step (save first, then load
+    `?wishlist=1`).
+  - **Double-click toggled the state:** a real bug that the tests missed.
+    The local server answered so fast that the second click of a
+    double-click landed on the freshly swapped-in Remove button. Each
+    click did what its label said at that moment, but the result defeated
+    story 7. Fixed with `hx-disabled-elt="this"` plus
+    `hx-swap="outerHTML settle:500ms"`, and a
+    `[&.htmx-added]:pointer-events-none` class on the wrapper so the new
+    button ignores clicks while it settles. I checked the vendored htmx
+    2.0.6 and the compiled Tailwind output before reporting. The user
+    confirmed the fix in the browser.
+  - **A wrong test assertion:** the first version of the guard test
+    expected `&amp;` in the class name. Django doesn't escape literal
+    template text, so the assertion was corrected to a bare `&`.
+
+## 2026-10-18 — Wishlist: broke the PRD into a two-phase plan
+
+### Prompts
+
+1. `/prd-to-plan @prd/wishlist.md`
+2. "I think phases 3, 4, and 5 are too small. Can we fit 3 and 5 into
+   phase 2 without making this phase too large. And is there somewhere we
+   can fit phase 4?"
+3. "yes, write the plan"
+4. "Add our session to PROMPTS.md"
+5. (Rejected a shell command) "What other options do we have?"
+6. "option 1"
+
+### Summary
+
+- **Outcome:**
+  - **Exploration:** before slicing, I read the cart code the PRD mirrors:
+    `Cart.for_user`, the owner-scoped `CartItemActionView`, `orders/urls.py`
+    for path shapes, the product detail template, the seed's
+    `_create_customer_cart` step, and `plans/account-security.md` for the
+    plan format.
+  - **First breakdown (five phases):** detail-page save/remove, the
+    Wishlist page and navbar link, Wishlist-page remove, the signed-out
+    visitor flow, and the seeded demo wishlist.
+  - **Final breakdown (two phases, one per page):**
+    - **Phase 1, detail-page button** (stories 1–8, 17, 18): the
+      `wishlist` app, both models and their methods, the admin, the add
+      and remove endpoints, the `in_wishlist` flag, all three button
+      states, and the `?wishlist=1` hint.
+    - **Phase 2, the Wishlist page** (stories 9–16, 19): the page and
+      navbar link, the newest-first list, the owner-scoped HTMX remove,
+      the empty state, and the seeded demo wishlist.
+  - **Plan:** written to `plans/wishlist.md`, with architectural
+    decisions, a description per phase, and acceptance criteria.
+  - **Still to do:** nothing is committed, and no code has changed. The
+    existing uncommitted change to `REFLECTION.md` was left alone.
+- **Deviations:**
+  - **Granularity overridden:** I suggested folding phases 3 and 5 into
+    Phase 2 and recommended keeping Phase 1 whole. The user found phases
+    3, 4, and 5 all too small and asked where Phase 4 could go. I put the
+    signed-out flow into Phase 1, since it is the third state of the same
+    button partial, and folded 3 and 5 into Phase 2. The user approved.
+  - **URL paths are my choice, not the PRD's:** the PRD fixes only the
+    `/wishlist/` mount and the namespace. I chose `add/<pk>/`,
+    `remove/<pk>/`, and `items/<pk>/remove/` to match the cart's paths,
+    and flagged them to the user.
+  - **Log request:** asked for with "Add our session to PROMPTS.md"
+    rather than the standard prompt. The entry follows the standard shape.
+- **Sideways:**
+  - **Shell command rejected:** to start this entry I ran a PowerShell
+    command to diff `PROMPTS.md` and count its lines. The user rejected
+    it and asked for other options. I offered three: read and append with
+    the file tools, take the format from the user, or draft the entry in
+    chat. The user chose the file tools, which needed no shell.
+
+## 2026-10-18 — Wishlist: grilled the design and wrote the PRD
+
+### Prompts
+
+1. `/grill-me` with: "We need to add a wishlist to the ThoughtTronix Store
+   that will allow customers to save products for later in a wishlist. Each
+   signed-in customer will have one wish list. We will not include named
+   wishlists, multiple wishlists, or shared wishlists. Customers should be
+   able to add or a remove a product from the product detail page without
+   needing to reload the full page. The Add/Remove button must show the
+   product's status in the wishlist. Customers will only be able to access
+   their own wishlist."
+2. (Q1, how the wishlist is stored) "Option A, mirror the cart"
+3. (Q2, which app) "Option A, new wishlist app"
+4. (Q3, what signed-out visitors see) "I like option A. Is there a way we
+   can at least hint to the user that they will still need to add that
+   item to the wishlist now that they've signed in?"
+   — then: "Option A, and leave signup out of scope"
+5. (Q4, toggle vs. separate endpoints) "Option B, separate add and remove
+   endpoints"
+6. (Q5, saving unavailable products) "a"
+7. (Q6, the wishlist page) "b"
+8. (Q7, Add to cart button style on the wishlist page) "Option A, match the
+   catalog"
+9. (Q8, Remove on the wishlist page) "Option A, mirror the cart line
+   actions"
+10. (Q9, navbar) "Option A, plain Wishlist link"
+11. (Q10, catalog cards) "Option A, detail page only"
+12. (Q11, seed data) "Option A, seed a demo wishlist"
+13. (Q12, button labels and look) "a"
+14. (Q13, expired session on an HTMX click) "Let's go with your
+    recommendation"
+15. `/to-prd`
+16. "Add our session to PROMPTS.md"
+
+### Summary
+
+- **Outcome:**
+  - **Design interview (13 questions).** Before asking anything, the
+    codebase was read: `Cart`/`CartItem`, the HTMX add-to-cart partial and
+    its signed-out login link, the owner-scoped cart line-action views, the
+    site-wide `cart_quantities` context processor, Django admin, and the
+    seed. Settled:
+    - **Data:** a new `wishlist` app; `Wishlist` (one-to-one with the user,
+      created lazily) and `WishlistItem` (product, `added_at`, unique per
+      wishlist), mirroring the cart.
+    - **Endpoints:** separate add and remove POSTs keyed by product for the
+      detail page, never a toggle; a wishlist-page remove keyed by item and
+      looked up through its owner, re-rendering the whole contents partial.
+    - **Detail page:** "♡ Save to wishlist" / "♥ Saved · Remove", both
+      outline, with `aria-pressed`. Signed-out visitors get a sign-in link
+      whose `next` carries a display-only `?wishlist=1` hint flag.
+    - **Wishlist page:** newest first, Unavailable badges, the cart's Add
+      to cart partial unchanged, HTMX Remove, a designed empty state, and a
+      plain navbar link.
+    - **Rules:** unavailable products can be saved; the button is on the
+      detail page only.
+    - **Admin and seed:** a Django admin inline like `Cart`; a seeded
+      wishlist for `customer` with an unavailable product and one already
+      in the cart.
+  - **PRD:** written to `prd/wishlist.md` with 19 user stories.
+  - **Still to do:** nothing is committed, and no code has changed. The
+    existing uncommitted change to `REFLECTION.md` was left alone.
+- **Deviations:**
+  - **Q3 follow-up:** the user took the recommendation but asked whether
+    the visitor could be told the product still needs saving after
+    sign-in. That became a three-option sub-question; the user took the
+    recommended template-only hint, and agreed to leave the signup path
+    out of scope.
+  - **Q6 overridden:** I recommended a read-and-remove wishlist page and
+    parked Add to cart as a follow-up. The user chose to include Add to
+    cart on each row, which created Q7.
+  - **Every other answer took the recommendation.**
+- **Sideways:**
+  - **Wrong claim about reuse:** in Q6 I said reusing `_add_button.html`
+    on the wishlist page would need a style variant, because a page of
+    `btn-primary` buttons breaks FRONTEND.md's one-primary rule. After the
+    answer, I checked the code: `cart_quantities` is already provided on
+    every page, and `catalog.html` already puts that same primary button on
+    every card. I corrected the claim before asking Q7, and the user chose
+    to match the catalog.
+  - **Pre-existing flaw found, not fixed:** an HTMX POST after the session
+    expires follows `LoginRequiredMixin`'s redirect and swaps the whole
+    login page into the button. The cart's Add to cart already does this.
+    It's recorded in the PRD as a known limitation and a project-wide
+    follow-up.
+  - **Log insert took two tries:** my first edit to this file failed
+    because the text it matched against wasn't found, likely because of
+    line endings. Anchoring on the heading line alone worked.
+
 ## 2026-10-17 — Readable console email backend for whole links
 
 ### Prompts

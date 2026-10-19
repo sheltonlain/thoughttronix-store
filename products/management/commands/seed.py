@@ -10,7 +10,7 @@ Demo logins (documented in the README):
     employee / employee123    staff, "Junior Thought Curator"
     marketing / marketing123  staff with the manage_coupons permission
     customer / customer123    a plain customer, with order history, a live
-                              cart, and two saved addresses
+                              cart, a wishlist, and two saved addresses
 
 Five coupons show every coupon state, dated relative to the day the seed
 runs; SPRING-SALE has expired after a run of real (seeded) use.
@@ -35,6 +35,7 @@ from accounts.models import Address
 from coupons.models import Coupon
 from orders.models import Cart, Order, OrderItem
 from products.models import Category, Product, Tag
+from wishlist.models import Wishlist
 
 TAGS = [
     "always listening",
@@ -511,6 +512,15 @@ CUSTOMER_CART = [
     ("whisper-alarm-clock", 1),
 ]
 
+# The customer demo login's wishlist: (product slug, days since saved).
+# EchoPatch is unavailable; Seraphine is also in the cart.
+CUSTOMER_WISHLIST = [
+    ("mindsync-duo", 1),
+    ("echopatch", 6),
+    ("seraphine", 13),
+    ("moodset", 30),
+]
+
 # Staff who get the coupons.manage_coupons permission, granted directly.
 COUPON_MANAGERS = ["marketing"]
 
@@ -588,6 +598,7 @@ class Command(BaseCommand):
         self._attach_images()
         self._create_users()
         self._create_customer_cart()
+        self._create_customer_wishlist()
         self._create_customer_addresses()
         self._create_coupons()
         self._create_orders()
@@ -600,7 +611,7 @@ class Command(BaseCommand):
                 f"{get_user_model().objects.count()} users, "
                 f"{Coupon.objects.count()} coupons, "
                 f"{Order.objects.count()} orders, "
-                f"and a live cart for 'customer'."
+                f"and a live cart and wishlist for 'customer'."
             )
         )
 
@@ -609,6 +620,7 @@ class Command(BaseCommand):
         Order.objects.all().delete()
         Coupon.objects.all().delete()
         Cart.objects.all().delete()
+        Wishlist.objects.all().delete()
         Product.objects.all().delete()
         Tag.objects.all().delete()
         Category.objects.all().delete()
@@ -702,6 +714,17 @@ class Command(BaseCommand):
         cart = Cart.for_user(customer)
         for slug, quantity in CUSTOMER_CART:
             cart.items.create(product=Product.objects.get(slug=slug), quantity=quantity)
+
+    def _create_customer_wishlist(self):
+        """Saves backdated a few days apart, so the page shows its order."""
+        customer = get_user_model().objects.get(username="customer")
+        wishlist = Wishlist.for_user(customer)
+        now = timezone.now()
+        for slug, days_ago in CUSTOMER_WISHLIST:
+            wishlist.items.create(
+                product=Product.objects.get(slug=slug),
+                added_at=now - timedelta(days=days_ago),
+            )
 
     def _create_customer_addresses(self):
         customer = get_user_model().objects.get(username="customer")

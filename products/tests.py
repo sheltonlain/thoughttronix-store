@@ -10,6 +10,7 @@ from django.utils.html import escape
 
 from accounts.models import Address
 from orders.models import CartItem, Order, OrderItem
+from wishlist.models import WishlistItem
 
 from .models import Category, Product, Tag
 
@@ -248,6 +249,17 @@ def test_seed_builds_the_demo_world(db):
     shipped_to = set(customer.orders.values_list("shipping_street", flat=True))
     assert shipped_to == {home.street}
 
+    saved = [item.product for item in customer.wishlist.lines()]
+    assert [product.slug for product in saved] == [
+        "mindsync-duo",
+        "echopatch",
+        "seraphine",
+        "moodset",
+    ]
+    assert any(not product.is_available for product in saved)
+    in_cart = set(customer.cart.items.values_list("product", flat=True))
+    assert any(product.pk in in_cart for product in saved)
+
     mark_one = Product.objects.get(slug="soulsear-mark-i")
     assert not mark_one.is_available
     assert mark_one.category.name == "Defense"
@@ -266,6 +278,7 @@ def test_seed_is_idempotent(db):
         Product.objects.count(),
         get_user_model().objects.count(),
         CartItem.objects.count(),
+        WishlistItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
         Address.objects.count(),
@@ -278,6 +291,7 @@ def test_seed_is_idempotent(db):
         Product.objects.count(),
         get_user_model().objects.count(),
         CartItem.objects.count(),
+        WishlistItem.objects.count(),
         Order.objects.count(),
         OrderItem.objects.count(),
         Address.objects.count(),

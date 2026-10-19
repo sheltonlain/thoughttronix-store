@@ -12,6 +12,7 @@ from django.views.generic import (
 )
 
 from accounts.mixins import StaffRequiredMixin
+from wishlist.models import WishlistItem
 
 from .forms import CategoryForm, ProductForm, TagForm
 from .models import Category, Product, Tag
@@ -69,6 +70,18 @@ class ProductDetailView(DetailView):
     template_name = "products/detail.html"
     context_object_name = "product"
     queryset = Product.objects.select_related("category").prefetch_related("tags")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        # One existence check — a GET never creates the wishlist.
+        context["in_wishlist"] = (
+            user.is_authenticated
+            and WishlistItem.objects.filter(
+                wishlist__user=user, product=self.object
+            ).exists()
+        )
+        return context
 
 
 # --- The back office --------------------------------------------------------

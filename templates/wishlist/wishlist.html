@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Your Wishlist — The ThoughtTronix Store{% endblock %}
+
+{% block content %}
+  <h1 class="text-3xl font-bold">Your Wishlist</h1>
+
+  <div id="wishlist-contents" class="mt-6">
+    {% include "wishlist/partials/_wishlist_contents.html" %}
+  </div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{# The save-to-wishlist control, in all its states. Include with #}
+{# in_wishlist=<whether the product is saved>. Signed in, the button posts #}
+{# to a separate add or remove endpoint — never a toggle — and swaps this #}
+{# whole wrapper, so the post-sign-in hint goes away once used. #}
+{# Double-click guard: the button is disabled while its request is in #}
+{# flight, and the swapped-in button ignores clicks while htmx-added is on #}
+{# (the 500ms settle) — so a double-click's second click can't land on the #}
+{# new, opposite button. #}
+<div class="wishlist-control flex flex-col gap-1 [&.htmx-added]:pointer-events-none">
+  {% if user.is_authenticated %}
+    {% if in_wishlist %}
+      <button
+        hx-post="{% url 'wishlist:remove' product.pk %}"
+        hx-target="closest .wishlist-control"
+        hx-swap="outerHTML settle:500ms"
+        hx-disabled-elt="this"
+        aria-pressed="true"
+        class="btn btn-outline btn-secondary btn-sm">
+        ♥ Saved · Remove
+      </button>
+    {% else %}
+      <button
+        hx-post="{% url 'wishlist:add' product.pk %}"
+        hx-target="closest .wishlist-control"
+        hx-swap="outerHTML settle:500ms"
+        hx-disabled-elt="this"
+        aria-pressed="false"
+        class="btn btn-outline btn-sm">
+        ♡ Save to wishlist
+      </button>
+      {# Display-only: the flag never saves anything on a GET. #}
+      {% if request.GET.wishlist == "1" %}
+        <p class="text-xs opacity-70">You're signed in — click Save to keep this product.</p>
+      {% endif %}
+    {% endif %}
+  {% else %}
+    {# Visitors sign in and come back here, flagged for the hint. #}
+    <a href="{% url 'accounts:login' %}?next={{ product.get_absolute_url|add:'?wishlist=1'|urlencode }}"
+       class="btn btn-outline btn-sm">
+      ♡ Save to wishlist
+    </a>
+  {% endif %}
+</div>

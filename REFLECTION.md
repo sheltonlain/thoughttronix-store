@@ -5,6 +5,8 @@ Once Phase 3 was implemented, a forgot password link should be available on the 
 
 Question 2 - Authentication code versus the lesson. Identify two Django authentication components used in your completed Account Security Center. For each component, name the exact file where it appears, describe or quote the relevant line of code, and explain what the component does. Then explain how the implementation matches the authentication pattern from the lesson. Reopen Understanding Authentication. 
 
+
+
 Question 3 - Password management versus the lesson.
 
 The code that allows password changes is located in accounts/views.py in lines 137-152. It uses Django's built-in PasswordChangeView, which passes the user to the ChangePasswordForm in accounts/forms.py, lines 90-97. The form checks the old password, validates the new password, and stores the new password correctly. Once the password change is complete, PasswordChangeView also sends a message to the verified email address on file alerting the user that their password has been changed. PasswordChangeDoneView is not used in our codebase. Instead, PasswordChangeView redirects the user to the Security Center once their password change is complete (line 146 - success_url = reverse_lazy("accounts:security")). The user is logged out of any other sessions, but the current session is still active and shows the success message, "Password changed. Your other sessions have been signed out." I chose to implement this feature so the user would not have to login again as they would with the PasswordChangeDoneView. Since accounts require a verified email address, the account remains secure as an email alert goes out each time a change happens to the account. 
