@@ -1,0 +1,69 @@
+{% load review_extras %}
+{# The back office's review list — swapped whole into #manage-reviews-contents #}
+{# by the delete endpoint, so the count and empty state follow on their own. #}
+{# Delete sends the active filter back, so the re-render keeps it. #}
+{% with count=reviews.count %}
+<h2 class="mb-4 text-xl font-semibold">{{ count }} review{{ count|pluralize }}</h2>
+{% if count %}
+  <div class="overflow-x-auto rounded-box bg-base-100 shadow-md">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Author</th>
+          <th>Rating</th>
+          <th>Comment</th>
+          <th>Posted</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for review in reviews %}
+          <tr id="manage-review-{{ review.pk }}">
+            <td>
+              <a href="{{ review.product.get_absolute_url }}"
+                 class="link-hover font-semibold">{{ review.product.name }}</a>
+            </td>
+            <td>{{ review.user.public_name }}</td>
+            <td>{% stars review.rating "xs" %}</td>
+            <td class="max-w-sm">{{ review.comment|truncatechars:80 }}</td>
+            <td>
+              <div class="flex flex-col items-start gap-1">
+                <span class="whitespace-nowrap">{{ review.created_at|date:"M j, Y" }}</span>
+                {% if review.edited_by_staff %}
+                  <span class="badge badge-ghost badge-sm">Edited by staff</span>
+                {% elif review.is_edited %}
+                  <span class="badge badge-ghost badge-sm">Edited</span>
+                {% endif %}
+              </div>
+            </td>
+            <td class="text-right">
+              <button type="button"
+                      hx-post="{% url 'reviews:manage_delete' review.pk %}"
+                      {% if active_rating %}hx-vals='{"rating": "{{ active_rating }}"}'{% endif %}
+                      hx-target="#manage-reviews-contents"
+                      hx-confirm="Delete this review? This can't be undone."
+                      class="btn btn-ghost btn-sm text-error">Delete</button>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="py-16 text-center">
+    {% if active_rating %}
+      <p class="text-5xl">🔍</p>
+      <p class="mt-4 text-xl font-semibold">No {{ active_rating }}-star reviews</p>
+      <p class="mt-2 opacity-70">Nobody feels quite that way. Yet.</p>
+      <a href="{% url 'reviews:manage_reviews' %}" class="btn btn-primary btn-sm mt-6">
+        Show all reviews
+      </a>
+    {% else %}
+      <p class="text-5xl">💬</p>
+      <p class="mt-4 text-xl font-semibold">No reviews yet</p>
+      <p class="mt-2 opacity-70">The customers are keeping their thoughts to themselves. For now.</p>
+    {% endif %}
+  </div>
+{% endif %}
+{% endwith %}

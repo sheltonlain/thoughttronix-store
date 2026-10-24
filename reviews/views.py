@@ -10,7 +10,9 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.views import View
+from django.views.generic import TemplateView
 
+from accounts.mixins import StaffRequiredMixin
 from products.models import Product
 
 from .forms import ReviewForm
@@ -156,3 +158,53 @@ class DeleteReviewView(ChangeReviewMixin, View):
         product = review.product
         review.delete()
         return render_section(request, product)
+
+
+# --- The back office --------------------------------------------------------
+#
+# Staff moderation: every review, filterable by star rating, with an
+# in-place delete. There is no edit screen; editing stays inline on the
+# product page.
+
+MANAGE_CONTENTS_TEMPLATE = "reviews/partials/_manage_reviews_contents.html"
+
+
+def active_rating(params):
+    """The ``rating`` filter in ``params`` as 1–5, or None for anything else."""
+    rating = params.get("rating", "")
+    return int(rating) if rating in {"1", "2", "3", "4", "5"} else None
+
+
+def manage_context(rating):
+    return {
+        "reviews": Review.objects.rated(rating).select_related("user", "product"),
+        "active_rating": rating,
+    }
+
+
+class ManageReviewListView(StaffRequiredMixin, TemplateView):
+    """Every review, newest first, filterable via ``?rating=``."""
+
+    template_name = "reviews/manage_reviews.html"
+    extra_context = {"section": "reviews", "ratings": range(5, 0, -1)}
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(manage_context(active_rating(self.request.GET)))
+        return context
+
+
+class ManageDeleteReviewView(StaffRequiredMixin, View):
+    """HTMX: delete a review (behind ``hx-confirm``) and re-render the list.
+
+    Idempotent: a review that's already gone (say, deleted in another tab)
+    just re-renders the list.
+    """
+
+    def post(self, request, pk):
+        Review.objects.filter(pk=pk).delete()
+        return render(
+            request,
+            MANAGE_CONTENTS_TEMPLATE,
+            manage_context(active_rating(request.POST)),
+        )

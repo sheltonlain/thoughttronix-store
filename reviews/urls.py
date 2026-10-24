@@ -15,4 +15,14 @@ urlpatterns = [
     path("reviews/<int:pk>/edit/", views.EditReviewView.as_view(), name="edit"),
     path("reviews/<int:pk>/card/", views.ReviewCardView.as_view(), name="card"),
     path("reviews/<int:pk>/delete/", views.DeleteReviewView.as_view(), name="delete"),
+    path(
+        "backoffice/reviews/",
+        views.ManageReviewListView.as_view(),
+        name="manage_reviews",
+    ),
+    path(
+        "backoffice/reviews/<int:pk>/delete/",
+        views.ManageDeleteReviewView.as_view(),
+        name="manage_delete",
+    ),
 ]

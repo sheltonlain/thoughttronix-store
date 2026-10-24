@@ -309,17 +309,17 @@ the product page.
 
 ### Acceptance criteria
 
-- [ ] The tab and its delete endpoint are staff-only: visitors are sent to
+- [x] The tab and its delete endpoint are staff-only: visitors are sent to
       sign in and customers are refused (tested).
-- [ ] The tab appears in the back-office rail for staff and is active on
+- [x] The tab appears in the back-office rail for staff and is active on
       this page (tested).
-- [ ] The list shows every review newest first, with the product link,
+- [x] The list shows every review newest first, with the product link,
       public name, stars, excerpt, and date (tested).
-- [ ] `?rating=N` shows only N-star reviews, and an invalid value falls
+- [x] `?rating=N` shows only N-star reviews, and an invalid value falls
       back to all reviews (tested).
-- [ ] HTMX delete removes the review and re-renders the list with the
+- [x] HTMX delete removes the review and re-renders the list with the
       filter kept, and deleting a missing review just re-renders (tested).
-- [ ] Both empty states render: no reviews at all, and no match for the
+- [x] Both empty states render: no reviews at all, and no match for the
       filter (tested).
-- [ ] After `seed`, filtering to 1-star reviews and deleting one works in
+- [x] After `seed`, filtering to 1-star reviews and deleting one works in
       the browser without a page reload.

@@ -28,6 +28,78 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-24 — Customer reviews Phase 4: back-office Reviews tab, two delete behaviors built test-first
+
+### Prompts
+
+1. `/implement @prd/reviews.md @plans/reviews.md implement phase 4`
+2. (TDD selection) "Yes"
+3. (Cycle 1 test shown red) "Yes"
+4. (Cycle 1 green, move to behavior 2) "Yes"
+5. (Cycle 2 test shown red) "Yes"
+6. (Cycle 2 green, continue with the rest of the phase) "Yes"
+7. (After the manual-verification steps) "Yes"
+
+### Summary
+
+- **Outcome:**
+  - **TDD selection:** two behaviors, approved as proposed:
+    - back-office delete removes the review and re-renders the list with
+      the `?rating=` filter kept
+    - deleting a review that's already gone just re-renders the list
+    The rest (staff gating, the rail tab, the querystring filter, empty
+    states) reuses tested patterns, so it got ordinary tests.
+  - **Cycle 1:** the list view, URLs, templates, and a stub delete endpoint
+    (which rendered the unfiltered list without deleting) were built first
+    as scaffolding. The test was red on `assert not True` (the review still
+    existed). Made green by deleting the review and rendering the contents
+    partial with `active_rating(request.POST)`. The partial already sends
+    the active rating back through `hx-vals`, so the next delete keeps it.
+  - **Cycle 2:** cycle 1 deliberately used `get_object_or_404`, so the
+    missing-review test was red on `404 == 200`. Made green with
+    `Review.objects.filter(pk=pk).delete()`, which makes delete idempotent.
+  - **Rest of the phase (normal implementation):**
+    - `ReviewQuerySet.rated(rating)` (all reviews when `None`) and an
+      `active_rating()` helper that accepts only "1"–"5", shared by the list
+      (GET) and delete (POST).
+    - `ManageReviewListView` (`StaffRequiredMixin`, `section = "reviews"`)
+      at `/backoffice/reviews/`, and `ManageDeleteReviewView` at
+      `/backoffice/reviews/<pk>/delete/`.
+    - A Reviews tab in the staff rail between Orders and Dashboard, visible
+      to all staff.
+    - `manage_reviews.html` has the rating badges (Orders' `?status=`
+      pattern). The `_manage_reviews_contents.html` partial is swapped whole
+      into `#manage-reviews-contents`. It holds the count, a table (product
+      link, public name, stars, 80-character excerpt, date, edited badge,
+      Delete with `hx-confirm`), and two empty states: "No reviews yet", and
+      "No N-star reviews" with "Show all reviews".
+  - **Tests:** 99 in `reviews/tests.py` (up from 85), covering:
+    - staff-only gating for the tab and delete (visitors redirected,
+      customers 403), and delete rejecting GET
+    - the tab in the rail and active on its page
+    - list contents and newest-first order
+    - the rating filter, including invalid values
+    - both empty states, and the empty filter state after deleting the last
+      match
+    The full suite passed (573). Ruff is clean (format reflowed
+    `reviews/tests.py` and `reviews/views.py`). All 7 Phase 4 criteria are
+    ticked in `plans/reviews.md`.
+  - **Manual check:** I gave eight browser steps, and the user replied
+    "Yes" to confirm.
+- **Deviations:**
+  - **No recommendations were overridden, and no follow-up questions were
+    asked.**
+  - **My calls, where the plan doesn't say:**
+    - The Reviews tab isn't gated on a permission, so it sits outside the
+      coupons `perms` check.
+    - The list isn't paginated, matching the PRD's "every review".
+    - The filtered empty state's "Show all reviews" is a `btn-primary`, as
+      in Orders, so it's the page's one primary action.
+- **Sideways:**
+  - **A garbled assertion:** I first wrote the list test's date assertion
+    as a nonsense expression. I caught it before running the tests and
+    replaced it with a real "Mon D, YYYY" check.
+
 ## 2026-10-24 — Customer reviews Phase 3: editing and deleting reviews, two behaviors built test-first plus one regression test
 
 ### Prompts

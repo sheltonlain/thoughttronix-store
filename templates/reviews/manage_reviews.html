@@ -1,0 +1,25 @@
+{% extends "backoffice/base.html" %}
+
+{% block title %}Reviews — Back office{% endblock %}
+
+{% block backoffice %}
+  <div class="mb-4 flex flex-wrap items-center justify-end gap-4">
+    <div class="flex flex-wrap items-center gap-2 text-sm">
+      <span class="opacity-60">Rating:</span>
+      <a href="{% querystring rating=None %}"
+         class="badge {% if not active_rating %}badge-primary{% else %}badge-ghost{% endif %}">
+        all
+      </a>
+      {% for value in ratings %}
+        <a href="{% querystring rating=value %}"
+           class="badge {% if active_rating == value %}badge-primary{% else %}badge-ghost{% endif %}">
+          {{ value }}★
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div id="manage-reviews-contents">
+    {% include "reviews/partials/_manage_reviews_contents.html" %}
+  </div>
+{% endblock %}

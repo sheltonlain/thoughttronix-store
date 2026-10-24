@@ -30,6 +30,12 @@ class ReviewQuerySet(models.QuerySet):
             return self
         return self.filter(user=user)
 
+    def rated(self, rating):
+        """Only ``rating``-star reviews; every review when ``rating`` is None."""
+        if rating is None:
+            return self
+        return self.filter(rating=rating)
+
 
 class ReviewManager(models.Manager.from_queryset(ReviewQuerySet)):
     def eligibility(self, user, product):

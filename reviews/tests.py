@@ -977,3 +977,163 @@ def test_seed_builds_the_review_demo(db):
         # Each demo page has other people's reviews in its list.
         assert product.reviews.exclude(user=customer).exists(), slug
     assert customer.reviews.count() == 1
+
+
+# --- Back office ------------------------------------------------------------
+
+
+def manage_delete_url(review):
+    return reverse("reviews:manage_delete", kwargs={"pk": review.pk})
+
+
+def test_backoffice_delete_rerenders_the_list_keeping_the_filter(
+    client, staff_user, product
+):
+    spam = make_review(make_user("ana"), product, rating=1, comment="Spam spam.")
+    make_review(make_user("ben"), product, rating=1, comment="Truly awful.")
+    make_review(make_user("cal"), product, rating=5, comment="Loved it.")
+    client.force_login(staff_user)
+
+    response = client.post(manage_delete_url(spam), {"rating": "1"})
+    page = response.content.decode()
+
+    assert response.status_code == 200
+    assert not Review.objects.filter(pk=spam.pk).exists()
+    assert "Spam spam." not in page
+    assert "Truly awful." in page
+    assert "Loved it." not in page  # still filtered to 1-star
+    assert 'hx-vals=\'{"rating": "1"}\'' in page  # the next delete keeps it too
+
+
+def test_backoffice_delete_of_a_missing_review_just_rerenders(
+    client, staff_user, product
+):
+    gone = make_review(make_user("ana"), product, comment="Already removed.")
+    make_review(make_user("ben"), product, comment="Still here.")
+    url = manage_delete_url(gone)
+    gone.delete()  # e.g. by another staff member in another tab
+    client.force_login(staff_user)
+
+    response = client.post(url)
+    page = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Still here." in page
+    assert "Already removed." not in page
+
+
+MANAGE_URL = "/backoffice/reviews/"
+
+
+def test_the_reviews_tab_is_staff_only(client, customer, product):
+    review = make_review(customer, product)
+    login = reverse("accounts:login")
+
+    for response in (client.get(MANAGE_URL), client.post(manage_delete_url(review))):
+        assert response.status_code == 302
+        assert response["Location"].startswith(login)
+
+    client.force_login(customer)
+    assert client.get(MANAGE_URL).status_code == 403
+    assert client.post(manage_delete_url(review)).status_code == 403
+    assert Review.objects.filter(pk=review.pk).exists()
+
+
+def test_the_delete_endpoint_rejects_get(client, staff_user, customer, product):
+    review = make_review(customer, product)
+    client.force_login(staff_user)
+
+    assert client.get(manage_delete_url(review)).status_code == 405
+    assert Review.objects.exists()
+
+
+def test_the_reviews_tab_is_in_the_rail_and_active(client, staff_user):
+    client.force_login(staff_user)
+
+    page = client.get(reverse("products:manage_products")).content.decode()
+    assert f'href="{MANAGE_URL}">Reviews</a>' in page
+
+    response = client.get(reverse("reviews:manage_reviews"))
+    page = response.content.decode()
+    assert response.context["section"] == "reviews"
+    assert re.search(rf'tab-active"\s+href="{MANAGE_URL}"', page)
+
+
+def test_the_list_shows_every_review_newest_first(
+    client, staff_user, product, accessory
+):
+    now = timezone.now()
+    author = make_user("cmonroe", first_name="Casey", last_name="Monroe")
+    make_review(
+        author,
+        product,
+        rating=2,
+        comment="Older review. " + "x" * 200,
+        created_at=now - timedelta(days=3),
+    )
+    make_review(make_user("ana"), accessory, comment="Newer review.", created_at=now)
+    client.force_login(staff_user)
+
+    page = client.get(MANAGE_URL).content.decode()
+
+    assert "2 reviews" in page
+    assert page.index("Newer review.") < page.index("Older review.")
+    assert f'href="{detail_url(product)}"' in page
+    assert f'href="{detail_url(accessory)}"' in page
+    assert "Casey M." in page
+    assert "Monroe" not in page
+    assert "2 out of 5 stars" in page
+    assert "x" * 200 not in page  # an excerpt, not the whole comment
+    posted = timezone.localtime(now - timedelta(days=3))
+    assert f"{posted:%b} {posted.day}, {posted.year}" in page
+
+
+@pytest.mark.parametrize(
+    ("query", "shown"),
+    [
+        ({"rating": "1"}, {"One star."}),
+        ({"rating": "5"}, {"Five stars."}),
+        ({"rating": "9"}, {"One star.", "Five stars."}),
+        ({"rating": "bad"}, {"One star.", "Five stars."}),
+        ({}, {"One star.", "Five stars."}),
+    ],
+)
+def test_the_rating_filter(client, staff_user, product, query, shown):
+    make_review(make_user("ana"), product, rating=1, comment="One star.")
+    make_review(make_user("ben"), product, rating=5, comment="Five stars.")
+    client.force_login(staff_user)
+
+    page = client.get(MANAGE_URL, query).content.decode()
+
+    for comment in ("One star.", "Five stars."):
+        assert (comment in page) is (comment in shown), comment
+
+
+def test_the_list_has_an_empty_state(client, staff_user):
+    client.force_login(staff_user)
+
+    page = client.get(MANAGE_URL).content.decode()
+
+    assert "No reviews yet" in page
+    assert "Show all reviews" not in page
+
+
+def test_an_empty_filter_has_its_own_empty_state(client, staff_user, customer, product):
+    make_review(customer, product, rating=4)
+    client.force_login(staff_user)
+
+    page = client.get(MANAGE_URL, {"rating": "1"}).content.decode()
+
+    assert "No 1-star reviews" in page
+    assert "Show all reviews" in page
+
+
+def test_deleting_the_last_match_shows_the_empty_filter_state(
+    client, staff_user, customer, product
+):
+    review = make_review(customer, product, rating=1)
+    client.force_login(staff_user)
+
+    page = client.post(manage_delete_url(review), {"rating": "1"}).content.decode()
+
+    assert "No 1-star reviews" in page
