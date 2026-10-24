@@ -251,30 +251,30 @@ Every lookup goes through the "may change" queryset first:
 
 ### Acceptance criteria
 
-- [ ] The edit, cancel, save, and delete endpoints require sign-in, and
+- [x] The edit, cancel, save, and delete endpoints require sign-in, and
       save and delete reject GET (tested).
-- [ ] The permission method and the queryset answer correctly for the
+- [x] The permission method and the queryset answer correctly for the
       author, another customer, and staff (tested).
-- [ ] `revise` sets `edited_by_staff` for a staff edit and clears it on a
+- [x] `revise` sets `edited_by_staff` for a staff edit and clears it on a
       later author edit (tested).
-- [ ] Edit swaps in a prefilled form and cancel restores the unchanged
+- [x] Edit swaps in a prefilled form and cancel restores the unchanged
       card (tested).
-- [ ] Save re-renders the section showing "Edited" after an author edit
+- [x] Save re-renders the section showing "Edited" after an author edit
       and "Edited by staff" after a staff edit, and the list order is
       unchanged (tested).
-- [ ] An invalid save re-renders only the form with errors and changes
+- [x] An invalid save re-renders only the form with errors and changes
       nothing (tested).
-- [ ] Delete re-renders the section, and the author sees the create form
+- [x] Delete re-renders the section, and the author sees the create form
       again (tested).
-- [ ] Another customer's review 404s for edit, cancel, save, and delete,
+- [x] Another customer's review 404s for edit, cancel, save, and delete,
       and is left untouched (tested).
-- [ ] Staff can edit and delete any review (tested).
-- [ ] A review that no longer exists re-renders the section, with the "no
+- [x] Staff can edit and delete any review (tested).
+- [x] A review that no longer exists re-renders the section, with the "no
       longer exists" note for edit and save, and with no error for delete
       (tested).
-- [ ] Edit and Delete appear only on cards the viewer may change (tested).
-- [ ] Add to cart remains the detail page's only `btn-primary` (tested).
-- [ ] In the browser, editing and cancelling don't move the page, and
+- [x] Edit and Delete appear only on cards the viewer may change (tested).
+- [x] Add to cart remains the detail page's only `btn-primary` (tested).
+- [x] In the browser, editing and cancelling don't move the page, and
       Delete asks for confirmation first.
 
 ---

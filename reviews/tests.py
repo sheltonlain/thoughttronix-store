@@ -195,6 +195,26 @@ def test_reviews_are_newest_first(customer, product):
     assert list(Review.objects.all()) == [new, mid, old]
 
 
+def test_revise_marks_a_staff_edit_and_an_author_edit_clears_it(
+    customer, staff_user, product
+):
+    review = make_review(customer, product, rating=4, comment="First words.")
+
+    review.revise(2, "Moderated words.", by=staff_user)
+    review.refresh_from_db()
+
+    assert (review.rating, review.comment) == (2, "Moderated words.")
+    assert review.edited_by_staff is True
+    assert review.is_edited
+
+    review.revise(3, "My words again.", by=customer)
+    review.refresh_from_db()
+
+    assert (review.rating, review.comment) == (3, "My words again.")
+    assert review.edited_by_staff is False
+    assert review.is_edited
+
+
 def test_deleting_a_product_deletes_its_reviews(customer, product):
     make_review(customer, product)
 
@@ -447,6 +467,257 @@ def test_the_star_widget_renders_five_labelled_unchecked_radios():
     labels = re.findall(r'aria-label="([^"]+)"', html)
     assert labels == ["1 star", "2 stars", "3 stars", "4 stars", "5 stars"]
     assert "checked" not in html
+
+
+# --- Editing and deleting ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("method", "name", "note"),
+    [
+        ("get", "reviews:edit", True),
+        ("post", "reviews:edit", True),
+        ("get", "reviews:card", True),
+        ("post", "reviews:delete", False),
+    ],
+    ids=["edit", "save", "cancel", "delete"],
+)
+def test_changes_reach_only_reviews_the_user_may_change(
+    client, customer, product, method, name, note
+):
+    theirs = make_review(make_user("ana"), product, rating=5, comment="Ana's words.")
+    client.force_login(customer)
+    send = getattr(client, method)
+    data = {"product": product.pk, "rating": 1, "comment": "Hijacked."}
+
+    # Someone else's review: not found, and left untouched.
+    response = send(reverse(name, kwargs={"pk": theirs.pk}), data)
+
+    assert response.status_code == 404
+    theirs.refresh_from_db()
+    assert (theirs.rating, theirs.comment) == (5, "Ana's words.")
+
+    # A review that doesn't exist at all: a fresh section, with a note
+    # unless deleting (already done).
+    response = send(reverse(name, kwargs={"pk": theirs.pk + 1000}), data)
+    page = response.content.decode()
+
+    assert response.status_code == 200
+    assert page.lstrip().startswith('<section id="reviews-section"')
+    assert ("That review no longer exists." in page) is note
+
+
+def test_an_author_who_deletes_their_review_gets_the_form_back(
+    client, customer, product, make_order
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    mine = make_review(customer, product, comment="Taking it back.")
+    client.force_login(customer)
+
+    response = client.post(
+        reverse("reviews:delete", kwargs={"pk": mine.pk}), {"product": product.pk}
+    )
+    page = response.content.decode()
+
+    assert response.status_code == 200
+    assert not Review.objects.exists()
+    assert page.lstrip().startswith('<section id="reviews-section"')
+    assert "Taking it back." not in page
+    assert "No reviews yet." in page
+    assert f'hx-post="{create_url(product)}"' in page
+
+
+def change_url(name, review):
+    return reverse(name, kwargs={"pk": review.pk})
+
+
+@pytest.mark.parametrize(
+    ("method", "name"),
+    [
+        ("get", "reviews:edit"),
+        ("post", "reviews:edit"),
+        ("get", "reviews:card"),
+        ("post", "reviews:delete"),
+    ],
+)
+def test_changing_a_review_requires_sign_in(client, customer, product, method, name):
+    review = make_review(customer, product, comment="Still here.")
+
+    response = getattr(client, method)(
+        change_url(name, review), {"rating": 1, "comment": "Anon."}
+    )
+
+    assert response.status_code == 302
+    assert response.url.startswith(reverse("accounts:login"))
+    review.refresh_from_db()
+    assert review.comment == "Still here."
+
+
+def test_delete_rejects_get_and_cancel_rejects_post(client, customer, product):
+    review = make_review(customer, product)
+    client.force_login(customer)
+
+    assert client.get(change_url("reviews:delete", review)).status_code == 405
+    assert client.post(change_url("reviews:card", review)).status_code == 405
+    assert Review.objects.exists()
+
+
+def test_who_may_change_a_review(customer, staff_user, product):
+    review = make_review(customer, product)
+    other = make_user("ana")
+    theirs = make_review(other, product)
+
+    assert review.may_change(customer)
+    assert not review.may_change(other)
+    assert review.may_change(staff_user)
+    assert not review.may_change(AnonymousUser())
+
+    assert list(Review.objects.changeable_by(customer)) == [review]
+    assert list(Review.objects.changeable_by(other)) == [theirs]
+    assert set(Review.objects.changeable_by(staff_user)) == {review, theirs}
+    assert not Review.objects.changeable_by(AnonymousUser()).exists()
+
+
+def test_edit_swaps_in_a_prefilled_form_and_cancel_restores_the_card(
+    client, customer, product
+):
+    review = make_review(customer, product, rating=3, comment="Before.")
+    client.force_login(customer)
+
+    form = client.get(
+        change_url("reviews:edit", review), {"product": product.pk}
+    ).content.decode()
+
+    assert form.lstrip().startswith(f'<form id="review-{review.pk}"')
+    assert re.search(r'value="3"[^>]*\bchecked\b', form)
+    assert "Before.</textarea>" in form
+    assert 'id="reviews-section"' not in form
+
+    card = client.get(
+        change_url("reviews:card", review), {"product": product.pk}
+    ).content.decode()
+
+    assert card.lstrip().startswith(f'<article id="review-{review.pk}"')
+    assert "Before." in card
+    assert ">Edit</button>" in card
+    review.refresh_from_db()
+    assert (review.rating, review.comment, review.is_edited) == (3, "Before.", False)
+
+
+@pytest.mark.parametrize(
+    ("editor", "label"), [("author", ">Edited<"), ("staff", ">Edited by staff<")]
+)
+def test_save_rerenders_the_section_labelled_and_in_place(
+    client, customer, staff_user, product, editor, label
+):
+    now = timezone.now()
+    make_review(make_user("ana"), product, comment="Newest.", created_at=now)
+    review = make_review(
+        customer,
+        product,
+        rating=2,
+        comment="Middle.",
+        created_at=now - timedelta(days=1),
+    )
+    make_review(
+        make_user("ben"), product, comment="Oldest.", created_at=now - timedelta(days=2)
+    )
+    client.force_login(customer if editor == "author" else staff_user)
+
+    response = client.post(
+        change_url("reviews:edit", review),
+        {"product": product.pk, "rating": 5, "comment": "Middle, revised."},
+    )
+    page = response.content.decode()
+
+    assert response.status_code == 200
+    assert page.lstrip().startswith('<section id="reviews-section"')
+    assert response["HX-Retarget"] == "#reviews-section"
+    review.refresh_from_db()
+    assert (review.rating, review.comment) == (5, "Middle, revised.")
+    assert review.edited_by_staff is (editor == "staff")
+    assert label in page
+    if editor == "staff":
+        # Staff see every review in the list, in creation order.
+        assert page.index("Newest.") < page.index("Middle, revised.")
+        assert page.index("Middle, revised.") < page.index("Oldest.")
+    assert "4.3 out of 5" in page  # the summary follows the new rating
+
+
+def test_an_invalid_save_rerenders_only_the_form_and_changes_nothing(
+    client, customer, product
+):
+    review = make_review(customer, product, rating=4, comment="Original.")
+    client.force_login(customer)
+
+    response = client.post(
+        change_url("reviews:edit", review),
+        {"product": product.pk, "rating": 2, "comment": "   "},
+    )
+    page = response.content.decode()
+
+    assert response.status_code == 200
+    assert page.lstrip().startswith(f'<form id="review-{review.pk}"')
+    assert 'id="reviews-section"' not in page
+    assert "HX-Retarget" not in response
+    assert "Write a few words about it." in page
+    assert re.search(r'value="2"[^>]*\bchecked\b', page)
+    review.refresh_from_db()
+    assert (review.rating, review.comment, review.is_edited) == (4, "Original.", False)
+
+
+def test_staff_can_delete_any_review(client, customer, staff_user, product):
+    review = make_review(customer, product, comment="Spam, probably.")
+    client.force_login(staff_user)
+
+    response = client.post(
+        change_url("reviews:delete", review), {"product": product.pk}
+    )
+    page = response.content.decode()
+
+    assert response.status_code == 200
+    assert not Review.objects.exists()
+    assert "Spam, probably." not in page
+    assert "Only customers who've received this product can review it." in page
+
+
+@pytest.mark.parametrize("viewer", ["visitor", "author", "other", "staff"])
+def test_edit_and_delete_appear_only_on_changeable_cards(
+    client, customer, staff_user, product, make_order, viewer
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    mine = make_review(customer, product, comment="Mine.")
+    theirs = make_review(make_user("ana"), product, comment="Theirs.")
+    users = {"author": customer, "other": make_user("ben"), "staff": staff_user}
+    if viewer in users:
+        client.force_login(users[viewer])
+
+    page = client.get(detail_url(product)).content.decode()
+
+    expected = {
+        "visitor": set(),
+        "author": {mine},
+        "other": set(),
+        "staff": {mine, theirs},
+    }[viewer]
+    for review in (mine, theirs):
+        has_buttons = change_url("reviews:edit", review) in page
+        assert has_buttons is (review in expected), review
+        assert (change_url("reviews:delete", review) in page) is has_buttons
+    if expected:
+        assert "hx-confirm=" in page
+
+
+def test_a_staff_viewer_still_has_one_primary_button(
+    client, customer, staff_user, product
+):
+    make_review(customer, product)
+    client.force_login(staff_user)
+
+    page = client.get(detail_url(product)).content.decode()
+
+    assert ">Edit</button>" in page
+    assert page.count("btn-primary") == 1
 
 
 # --- Summary ----------------------------------------------------------------

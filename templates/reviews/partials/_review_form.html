@@ -1,12 +1,26 @@
-{# The create form in the pinned slot. Include with form=<ReviewForm>. #}
-{# Posts by HTMX and swaps the whole reviews section; the submit button is #}
-{# disabled while the request is in flight. Outline only: Add to cart #}
-{# keeps the page's one btn-primary. #}
+{# The review form. Include with form=<ReviewForm>, plus editing=<Review> #}
+{# to edit that review in place of its card. #}
+{# Create posts by HTMX and swaps the whole reviews section. Edit swaps #}
+{# this card-sized form: an invalid save comes back here, a valid one #}
+{# retargets the whole section. Every request also sends the product's pk, #}
+{# so a review deleted meanwhile can still re-render its section. The #}
+{# submit button is disabled while the request is in flight. Outline and #}
+{# ghost only: Add to cart keeps the page's one btn-primary. #}
+{% if editing %}
+<form id="review-{{ editing.pk }}"
+      hx-post="{% url 'reviews:edit' editing.pk %}"
+      hx-target="this"
+      hx-swap="outerHTML"
+      hx-disabled-elt="find button"
+      class="review-form space-y-4 rounded-box bg-base-200 p-4">
+  <input type="hidden" name="product" value="{{ editing.product_id }}">
+{% else %}
 <form hx-post="{% url 'reviews:create' product.pk %}"
       hx-target="#reviews-section"
       hx-swap="outerHTML"
       hx-disabled-elt="find button"
       class="review-form space-y-4 rounded-box bg-base-200 p-4">
+{% endif %}
   <fieldset>
     <legend class="label mb-1">{{ form.rating.label }}</legend>
     {{ form.rating }}
@@ -21,5 +35,17 @@
       <p class="mt-1 text-sm text-error">{{ error }}</p>
     {% endfor %}
   </div>
-  <button type="submit" class="btn btn-outline btn-sm">Post review</button>
+  {% if editing %}
+    <div class="flex gap-2">
+      <button type="submit" class="btn btn-outline btn-sm">Save</button>
+      <button type="button"
+              hx-get="{% url 'reviews:card' editing.pk %}"
+              hx-vals='{"product": "{{ editing.product_id }}"}'
+              hx-target="#review-{{ editing.pk }}"
+              hx-swap="outerHTML"
+              class="btn btn-ghost btn-sm">Cancel</button>
+    </div>
+  {% else %}
+    <button type="submit" class="btn btn-outline btn-sm">Post review</button>
+  {% endif %}
 </form>

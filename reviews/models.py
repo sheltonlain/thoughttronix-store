@@ -18,7 +18,20 @@ class Eligibility(models.TextChoices):
     NOT_A_BUYER = "not_a_buyer", "Not a buyer"
 
 
-class ReviewManager(models.Manager):
+class ReviewQuerySet(models.QuerySet):
+    def changeable_by(self, user):
+        """The reviews ``user`` may edit or delete: their own, or all for staff.
+
+        The matching per-review check is ``Review.may_change``.
+        """
+        if not user.is_authenticated:
+            return self.none()
+        if user.is_staff:
+            return self
+        return self.filter(user=user)
+
+
+class ReviewManager(models.Manager.from_queryset(ReviewQuerySet)):
     def eligibility(self, user, product):
         """The user's one ``Eligibility`` state for reviewing ``product``.
 
@@ -151,6 +164,22 @@ class Review(models.Model):
         if self.updated_at is None:
             self.updated_at = self.created_at
         super().save(*args, **kwargs)
+
+    def may_change(self, user):
+        """Whether ``user`` may edit or delete this review: its author, or staff."""
+        return user.is_authenticated and (user.is_staff or user.pk == self.user_id)
+
+    def revise(self, rating, comment, by):
+        """Apply an edit by ``by``, the author or a staff member.
+
+        A staff edit marks the review "Edited by staff"; the author's own
+        edit clears that mark, since the words are theirs again.
+        """
+        self.rating = rating
+        self.comment = comment
+        self.edited_by_staff = by.pk != self.user_id
+        self.updated_at = timezone.now()
+        self.save(update_fields=["rating", "comment", "edited_by_staff", "updated_at"])
 
     @property
     def is_edited(self):
