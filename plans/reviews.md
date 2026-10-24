@@ -194,23 +194,23 @@ view. The thin create view handles each outcome:
 
 ### Acceptance criteria
 
-- [ ] The create endpoint requires sign-in and rejects GET (tested).
-- [ ] A delivered buyer's valid submission creates the review and
+- [x] The create endpoint requires sign-in and rejects GET (tested).
+- [x] A delivered buyer's valid submission creates the review and
       re-renders the section with their card pinned and the summary
       updated (tested).
-- [ ] A missing rating and a blank or whitespace-only comment show errors
+- [x] A missing rating and a blank or whitespace-only comment show errors
       beside their fields with the entered values preserved, and a comment
       over 2,000 characters is rejected (tested).
-- [ ] A duplicate submission leaves the existing review untouched and shows
+- [x] A duplicate submission leaves the existing review untouched and shows
       the "already reviewed" note (tested at the manager and view levels).
-- [ ] Signed-in users who are not buyers, are awaiting delivery, or are
+- [x] Signed-in users who are not buyers, are awaiting delivery, or are
       staff who haven't bought the product all get a 403 and create
       nothing (tested).
-- [ ] A delivered buyer can review an unavailable product, and a SoulSear
+- [x] A delivered buyer can review an unavailable product, and a SoulSear
       Mark II buyer can review it through the endpoint (tested).
-- [ ] The star widget renders five labelled radios with none checked
+- [x] The star widget renders five labelled radios with none checked
       (tested).
-- [ ] Add to cart remains the detail page's only `btn-primary`.
+- [x] Add to cart remains the detail page's only `btn-primary`.
 - [ ] As the seeded `customer`, MindSync's form submits in place without a
       page reload.
 

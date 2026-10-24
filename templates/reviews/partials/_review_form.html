@@ -1,0 +1,25 @@
+{# The create form in the pinned slot. Include with form=<ReviewForm>. #}
+{# Posts by HTMX and swaps the whole reviews section; the submit button is #}
+{# disabled while the request is in flight. Outline only: Add to cart #}
+{# keeps the page's one btn-primary. #}
+<form hx-post="{% url 'reviews:create' product.pk %}"
+      hx-target="#reviews-section"
+      hx-swap="outerHTML"
+      hx-disabled-elt="find button"
+      class="review-form space-y-4 rounded-box bg-base-200 p-4">
+  <fieldset>
+    <legend class="label mb-1">{{ form.rating.label }}</legend>
+    {{ form.rating }}
+    {% for error in form.rating.errors %}
+      <p class="mt-1 text-sm text-error">{{ error }}</p>
+    {% endfor %}
+  </fieldset>
+  <div>
+    <label class="label mb-1" for="{{ form.comment.id_for_label }}">{{ form.comment.label }}</label>
+    {{ form.comment }}
+    {% for error in form.comment.errors %}
+      <p class="mt-1 text-sm text-error">{{ error }}</p>
+    {% endfor %}
+  </div>
+  <button type="submit" class="btn btn-outline btn-sm">Post review</button>
+</form>

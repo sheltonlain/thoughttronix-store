@@ -1,0 +1,8 @@
+{# RadioSelect, restyled as DaisyUI's rating: five mask-star radios. Each #}
+{# radio's aria-label is its choice label ("3 stars"); nothing is checked #}
+{# until the customer picks, unless the form is re-rendered with a value. #}
+<div class="rating rating-lg">
+  {% for group, options, index in widget.optgroups %}{% for option in options %}
+    <input type="radio" name="{{ option.name }}" value="{{ option.value|stringformat:'s' }}" aria-label="{{ option.label }}"{% include "django/forms/widgets/attrs.html" with widget=option %} />
+  {% endfor %}{% endfor %}
+</div>

@@ -1,7 +1,7 @@
 {% load review_extras %}
 {# The product page's reviews section: summary, the viewer's pinned slot, #}
 {# then everyone else's reviews, newest first. Context comes from #}
-{# Review.objects.section(). Later phases swap this whole element. #}
+{# reviews.views.section_context(). Create swaps this whole element. #}
 <section id="reviews-section" class="mt-12" aria-labelledby="reviews-heading">
   <h2 id="reviews-heading" class="text-2xl font-bold">Reviews</h2>
 
@@ -17,13 +17,16 @@
 
   <div class="mt-6">
     {% if eligibility == "already_reviewed" %}
+      {% if duplicate %}
+        <div class="alert alert-info mb-3" role="status">
+          <span>You've already reviewed this product. Here's your review.</span>
+        </div>
+      {% endif %}
       <p class="mb-2 text-sm font-semibold opacity-70">Your review</p>
       {% include "reviews/partials/_review_card.html" with review=own_review %}
     {% elif eligibility == "can_review" %}
-      {# Phase 2 puts the review form here. #}
-      <div class="alert">
-        <span>You've received this product. Reviewing opens soon.</span>
-      </div>
+      <p class="mb-2 text-sm font-semibold opacity-70">You've received this product. How did it go?</p>
+      {% include "reviews/partials/_review_form.html" with form=review_form %}
     {% elif eligibility == "signed_out" %}
       <div class="alert">
         <span>Bought this? Tell everyone how it went.</span>

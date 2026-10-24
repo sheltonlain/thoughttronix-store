@@ -1,6 +1,7 @@
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
 from orders.models import Order
@@ -42,6 +43,39 @@ class ReviewManager(models.Manager):
         if statuses & {Order.Status.PLACED, Order.Status.SHIPPED}:
             return Eligibility.AWAITING_DELIVERY
         return Eligibility.NOT_A_BUYER
+
+    def ensure_may_submit(self, user, product):
+        """Return the user's eligibility, or raise ``PermissionDenied``.
+
+        Only a delivered buyer may submit, plus someone who already has, so
+        their duplicate can be answered with their review instead of a 403.
+        """
+        eligibility = self.eligibility(user, product)
+        if eligibility not in (Eligibility.CAN_REVIEW, Eligibility.ALREADY_REVIEWED):
+            raise PermissionDenied
+        return eligibility
+
+    def submit(self, user, product, rating, comment):
+        """Create ``user``'s review of ``product``; return ``(review, created)``.
+
+        Eligibility is re-checked here, whatever the page showed: anyone
+        but a delivered buyer gets ``PermissionDenied``. A user who has
+        already reviewed the product gets their existing review back
+        untouched with ``created=False``, so a double-click or a stale
+        second tab can never overwrite it. That holds even when a
+        concurrent request wins the race to insert: the unique constraint
+        catches it here, and the ``IntegrityError`` never reaches the view.
+        """
+        if self.ensure_may_submit(user, product) == Eligibility.ALREADY_REVIEWED:
+            return self.get(user=user, product=product), False
+        try:
+            with transaction.atomic():
+                review = self.create(
+                    user=user, product=product, rating=rating, comment=comment
+                )
+        except IntegrityError:
+            return self.get(user=user, product=product), False
+        return review, True
 
     def section(self, user, product):
         """Everything the product page's reviews section renders.

@@ -12,7 +12,7 @@ from django.views.generic import (
 )
 
 from accounts.mixins import StaffRequiredMixin
-from reviews.models import Review
+from reviews.views import section_context
 from wishlist.models import WishlistItem
 
 from .forms import CategoryForm, ProductForm, TagForm
@@ -82,7 +82,7 @@ class ProductDetailView(DetailView):
                 wishlist__user=user, product=self.object
             ).exists()
         )
-        context.update(Review.objects.section(user, self.object))
+        context.update(section_context(user, self.object))
         return context
 
 

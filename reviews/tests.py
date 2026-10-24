@@ -1,6 +1,8 @@
+import re
 from datetime import timedelta
 from decimal import Decimal
 from io import StringIO
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -14,6 +16,7 @@ from accounts.models import Address
 from orders.models import Order, OrderItem
 from products.models import Category, Product
 
+from .forms import ReviewForm
 from .models import Eligibility, Review
 from .templatetags.review_extras import stars
 
@@ -208,6 +211,244 @@ def test_deleting_a_user_deletes_their_reviews(customer, product):
     assert not Review.objects.exists()
 
 
+# --- Submitting -------------------------------------------------------------
+
+
+def test_a_duplicate_submit_returns_the_existing_review_untouched(
+    customer, product, make_order
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    existing = make_review(customer, product, rating=4, comment="First words.")
+
+    review, created = Review.objects.submit(customer, product, 1, "Stale tab.")
+
+    assert created is False
+    assert review == existing
+    existing.refresh_from_db()
+    assert (existing.rating, existing.comment) == (4, "First words.")
+    assert Review.objects.count() == 1
+
+
+# --- The create endpoint ----------------------------------------------------
+
+
+def create_url(product):
+    return reverse("reviews:create", kwargs={"pk": product.pk})
+
+
+@pytest.mark.parametrize(
+    ("username", "status"),
+    [
+        ("customer", None),  # never bought it
+        ("customer", Order.Status.PLACED),
+        ("customer", Order.Status.SHIPPED),
+        ("employee", None),  # staff who haven't bought it
+    ],
+)
+def test_ineligible_users_are_refused_and_nothing_is_created(
+    client, customer, staff_user, product, make_order, username, status
+):
+    user = customer if username == "customer" else staff_user
+    if status:
+        make_order(user, product, status=status)
+    client.force_login(user)
+
+    response = client.post(create_url(product), {"rating": 5, "comment": "Sneaky."})
+
+    assert response.status_code == 403
+    assert not Review.objects.exists()
+
+
+def test_a_delivered_buyers_review_is_pinned_and_counted(
+    client, customer, product, make_order
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    make_review(make_user("ana"), product, rating=2, comment="Someone else's words.")
+    client.force_login(customer)
+
+    response = client.post(
+        create_url(product), {"rating": 5, "comment": "She finishes my sentences."}
+    )
+    page = response.content.decode()
+
+    review = Review.objects.get(user=customer, product=product)
+    assert (review.rating, review.comment) == (5, "She finishes my sentences.")
+    assert response.status_code == 200
+    assert page.lstrip().startswith('<section id="reviews-section"')
+    assert "<html" not in page
+    assert "3.5 out of 5" in page
+    assert "2 reviews" in page
+    assert page.index("Your review") < page.index("She finishes my sentences.")
+    assert page.index("She finishes my sentences.") < page.index("Someone else")
+    assert 'class="review-form' not in page
+
+
+def test_a_stale_invalid_form_still_gets_the_already_reviewed_note(
+    client, customer, product, make_order
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    make_review(customer, product, rating=4, comment="First words.")
+    client.force_login(customer)
+
+    response = client.post(create_url(product), {"rating": "", "comment": "   "})
+    page = response.content.decode()
+
+    assert response.status_code == 200
+    assert "You've already reviewed this product." in page
+    assert "First words." in page
+    review = Review.objects.get(user=customer, product=product)
+    assert (review.rating, review.comment) == (4, "First words.")
+
+
+def test_create_requires_sign_in(client, product):
+    response = client.post(create_url(product), {"rating": 5, "comment": "Hi."})
+
+    assert response.status_code == 302
+    assert response.url.startswith(reverse("accounts:login"))
+    assert not Review.objects.exists()
+
+
+def test_create_rejects_get(client, customer, product, make_order):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    client.force_login(customer)
+
+    assert client.get(create_url(product)).status_code == 405
+
+
+def test_a_missing_rating_errors_and_keeps_the_comment(
+    client, customer, product, make_order
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    client.force_login(customer)
+
+    response = client.post(create_url(product), {"comment": "Kept words."})
+    page = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Choose a star rating." in page
+    assert "Kept words.</textarea>" in page
+    assert not Review.objects.exists()
+
+
+@pytest.mark.parametrize("comment", ["", "   \n  "])
+def test_a_blank_comment_errors_and_keeps_the_rating(
+    client, customer, product, make_order, comment
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    client.force_login(customer)
+
+    response = client.post(create_url(product), {"rating": 3, "comment": comment})
+    form = response.context["review_form"]
+
+    assert form.errors["comment"] == ["Write a few words about it."]
+    assert re.search(r'value="3"[^>]*\bchecked\b', response.content.decode())
+    assert not Review.objects.exists()
+
+
+def test_a_comment_over_2000_characters_is_rejected(
+    client, customer, product, make_order
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    client.force_login(customer)
+
+    response = client.post(create_url(product), {"rating": 4, "comment": "x" * 2001})
+
+    assert "at most 2000 characters" in response.content.decode()
+    assert not Review.objects.exists()
+
+
+def test_a_comment_of_exactly_2000_characters_is_accepted(
+    client, customer, product, make_order
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    client.force_login(customer)
+
+    client.post(create_url(product), {"rating": 4, "comment": "x" * 2000})
+
+    assert Review.objects.get().comment == "x" * 2000
+
+
+def test_a_valid_duplicate_post_shows_the_note_and_changes_nothing(
+    client, customer, product, make_order
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    make_review(customer, product, rating=4, comment="First words.")
+    client.force_login(customer)
+
+    page = client.post(
+        create_url(product), {"rating": 1, "comment": "Second thoughts."}
+    ).content.decode()
+
+    assert "You've already reviewed this product." in page
+    assert "Second thoughts." not in page
+    review = Review.objects.get()
+    assert (review.rating, review.comment) == (4, "First words.")
+
+
+def test_a_concurrent_duplicate_is_caught_by_the_unique_constraint(
+    customer, product, make_order
+):
+    make_order(customer, product, status=Order.Status.DELIVERED)
+    existing = make_review(customer, product, rating=4, comment="Won the race.")
+
+    # The other request passed the eligibility check before this one's
+    # review was saved, so it believes it can still create.
+    with patch.object(
+        type(Review.objects), "eligibility", return_value=Eligibility.CAN_REVIEW
+    ):
+        review, created = Review.objects.submit(customer, product, 1, "Lost it.")
+
+    assert created is False
+    assert review == existing
+    assert Review.objects.get().comment == "Won the race."
+
+
+def test_a_delivered_buyer_can_review_an_unavailable_product(
+    client, customer, unavailable_product, make_order
+):
+    make_order(customer, unavailable_product, status=Order.Status.DELIVERED)
+    client.force_login(customer)
+
+    response = client.post(
+        create_url(unavailable_product), {"rating": 2, "comment": "Recalled, fairly."}
+    )
+
+    assert response.status_code == 200
+    assert Review.objects.get().product == unavailable_product
+
+
+def test_a_soulsear_owner_can_review_it_through_the_endpoint(client, db, make_order):
+    defense = Category.objects.create(name="Defense", slug="defense")
+    soulsear = Product.objects.create(
+        name="SoulSear Mark II",
+        slug="soulsear-mark-ii",
+        price=Decimal("2400000.00"),
+        category=defense,
+    )
+    owner = make_user("owner", first_name="Owen", last_name="Rourke")
+    make_order(owner, soulsear, status=Order.Status.DELIVERED)
+    client.force_login(owner)
+
+    response = client.post(
+        create_url(soulsear), {"rating": 5, "comment": "Peace of mind. Mostly."}
+    )
+
+    assert response.status_code == 200
+    assert Review.objects.get().user == owner
+
+
+def test_the_star_widget_renders_five_labelled_unchecked_radios():
+    html = str(ReviewForm()["rating"])
+
+    radios = re.findall(r"<input [^>]*>", html)
+    assert len(radios) == 5
+    assert all('type="radio"' in radio for radio in radios)
+    assert all("mask-star-2" in radio for radio in radios)
+    labels = re.findall(r'aria-label="([^"]+)"', html)
+    assert labels == ["1 star", "2 stars", "3 stars", "4 stars", "5 stars"]
+    assert "checked" not in html
+
+
 # --- Summary ----------------------------------------------------------------
 
 
@@ -293,16 +534,16 @@ def test_staff_who_havent_bought_get_the_same_message(client, staff_user, produc
     assert "Only customers who've received this product can review it." in page
 
 
-def test_a_delivered_buyer_sees_the_can_review_placeholder(
-    client, customer, product, make_order
-):
+def test_a_delivered_buyer_sees_the_review_form(client, customer, product, make_order):
     make_order(customer, product, status=Order.Status.DELIVERED)
     client.force_login(customer)
 
     response = client.get(detail_url(product))
+    page = response.content.decode()
 
     assert response.context["eligibility"] == Eligibility.CAN_REVIEW
-    assert "Reviewing opens soon." in response.content.decode()
+    assert f'hx-post="{create_url(product)}"' in page
+    assert 'hx-target="#reviews-section"' in page
 
 
 def test_a_reviewer_sees_their_own_review_pinned_once(
@@ -408,12 +649,15 @@ def test_cards_label_edits(client, product):
     assert "Edited by staff" in cards["Staff edit."]
 
 
-@pytest.mark.parametrize("signed_in", [False, True])
+@pytest.mark.parametrize(
+    ("signed_in", "reviewed"), [(False, True), (True, True), (True, False)]
+)
 def test_add_to_cart_stays_the_only_primary_button(
-    client, customer, product, make_order, signed_in
+    client, customer, product, make_order, signed_in, reviewed
 ):
     make_order(customer, product, status=Order.Status.DELIVERED)
-    make_review(customer, product)
+    if reviewed:
+        make_review(customer, product)
     make_review(make_user("ana"), product)
     if signed_in:
         client.force_login(customer)
