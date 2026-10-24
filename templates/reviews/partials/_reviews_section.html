@@ -1,0 +1,51 @@
+{% load review_extras %}
+{# The product page's reviews section: summary, the viewer's pinned slot, #}
+{# then everyone else's reviews, newest first. Context comes from #}
+{# Review.objects.section(). Later phases swap this whole element. #}
+<section id="reviews-section" class="mt-12" aria-labelledby="reviews-heading">
+  <h2 id="reviews-heading" class="text-2xl font-bold">Reviews</h2>
+
+  <div class="mt-2 flex items-center gap-3">
+    {% if review_summary.count %}
+      {% stars review_summary.average "md" %}
+      <span class="font-semibold">{{ review_summary.average|floatformat:1 }} out of 5</span>
+      <span class="opacity-70">· {{ review_summary.count }} review{{ review_summary.count|pluralize }}</span>
+    {% else %}
+      <span class="opacity-70">No reviews yet.</span>
+    {% endif %}
+  </div>
+
+  <div class="mt-6">
+    {% if eligibility == "already_reviewed" %}
+      <p class="mb-2 text-sm font-semibold opacity-70">Your review</p>
+      {% include "reviews/partials/_review_card.html" with review=own_review %}
+    {% elif eligibility == "can_review" %}
+      {# Phase 2 puts the review form here. #}
+      <div class="alert">
+        <span>You've received this product. Reviewing opens soon.</span>
+      </div>
+    {% elif eligibility == "signed_out" %}
+      <div class="alert">
+        <span>Bought this? Tell everyone how it went.</span>
+        <a href="{% url 'accounts:login' %}?next={{ product.get_absolute_url|urlencode }}"
+           class="btn btn-outline btn-sm">Sign in to review</a>
+      </div>
+    {% elif eligibility == "awaiting_delivery" %}
+      <div class="alert">
+        <span>You can review this once your order is delivered.</span>
+      </div>
+    {% else %}
+      <div class="alert">
+        <span>Only customers who've received this product can review it.</span>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if other_reviews %}
+    <div class="mt-6 flex flex-col gap-4">
+      {% for review in other_reviews %}
+        {% include "reviews/partials/_review_card.html" %}
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>

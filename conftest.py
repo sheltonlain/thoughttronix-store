@@ -188,6 +188,47 @@ def make_coupon(db):
 
 
 @pytest.fixture
+def make_order(db):
+    """Build an order for ``user`` with one line per product: Placed,
+    unless ``status`` says otherwise.
+
+    A builder, because order-history tests need orders in several
+    statuses side by side. Addresses and card are filler.
+    """
+    from orders.models import Order, OrderItem
+
+    def make(user, *products, status=Order.Status.PLACED):
+        order = Order.objects.create(
+            user=user,
+            status=status,
+            total=sum((p.price for p in products), Decimal("0.00")),
+            email=user.email or "buyer@example.com",
+            shipping_name="Casey Monroe",
+            shipping_street="214 Synapse Street",
+            shipping_city="Canyon",
+            shipping_state="TX",
+            shipping_zip="79015",
+            billing_name="Casey Monroe",
+            billing_street="214 Synapse Street",
+            billing_city="Canyon",
+            billing_state="TX",
+            billing_zip="79015",
+            card_last4="4242",
+        )
+        for p in products:
+            OrderItem.objects.create(
+                order=order,
+                product=p,
+                product_name=p.name,
+                unit_price=p.price,
+                quantity=1,
+            )
+        return order
+
+    return make
+
+
+@pytest.fixture
 def address(customer):
     return Address.objects.create(
         user=customer,

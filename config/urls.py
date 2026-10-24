@@ -17,6 +17,7 @@ urlpatterns = [
     path("", include("orders.urls")),
     path("", include("coupons.urls")),
     path("wishlist/", include("wishlist.urls")),
+    path("", include("reviews.urls")),
     path(
         "safety/",
         TemplateView.as_view(template_name="pages/recall_notices.html"),

@@ -28,6 +28,290 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-10-24 — Customer reviews Phase 1: read-only section and seeded reviews, three behaviors built test-first
+
+### Prompts
+
+1. `/implement @prd/reviews.md @plans/reviews.md implement phase 1`
+2. (TDD selection) "approved, go ahead"
+3. (Cycle 1 test shown red) "Approved, make it pass"
+4. "Move to cycle 2"
+5. (Cycle 2 test shown red) "Approved, make it pass"
+6. "Move to cycle 3"
+7. (Cycle 3 test shown red) "Approved, make it pass"
+8. "Yes, go ahead with the rest of phase 1"
+9. "In step 3, wnen I look at DreamWeaver, my review apprears to be pinned
+   at the top, but there are no other reviews, so it is hard to tell for
+   sure. Additionally, since I have already received MindSync and SyncRest,
+   I should I already be able to review the product. Finally, all of the
+   warnings about reviews should appear next to a "Leave Your Review"
+   button that is either clickable or grayed out based on the status of
+   the order."
+10. (Rejected a three-question prompt about the button) "Let's keep the
+    form open as originally discussed in the PRD. Do not add the "Leave
+    Your Review" button."
+11. "It works now, go ahead and finish the phase"
+
+### Summary
+
+- **Outcome:**
+  - **TDD selection:** three behaviors, approved as proposed:
+    - `Review.objects.eligibility(user, product)` returns one named state
+    - `Review.objects.summary(product)` returns the average and count
+    - `User.public_name()` gives "Casey M." or the username
+  - **Cycle 1:** a parametrized test over order status (Delivered → can
+    review, Placed and Shipped → awaiting delivery, Cancelled → not a
+    buyer). Red against a stub that always said "not a buyer", so the
+    Cancelled case passed by accident, which I said at the time. Made
+    green with one query over the user's own orders containing the
+    product. The signed-out and already-reviewed states were added later
+    with normal tests.
+  - **Cycle 2:** red against a stub that returned an empty summary. The
+    test fixed the empty case as `average: None`, not 0. A 1-star review
+    on another product proves other products don't leak in. Made green
+    with one `aggregate(Avg, Count)`.
+  - **Cycle 3:** a stub `public_name()` that returned `""` came first, so
+    the failure was an assertion, not an `AttributeError`. First name
+    with no last name shows just the first name: my call, flagged.
+  - **Rest of the phase (normal implementation):**
+    - A new `reviews` app: the `Review` model with a rating check
+      constraint and a unique user–product constraint, migration `0001`,
+      and the admin with a rating filter and search. URLs are mounted at
+      the root with no endpoints yet.
+    - `Review.objects.section(user, product)` builds the whole section
+      context, so Phases 2 and 3 can re-render it. `ProductDetailView`
+      just adds it.
+    - Partials `_reviews_section.html`, `_review_card.html`, and
+      `_stars.html`. A `{% stars %}` tag rounds averages to whole stars
+      (4.5 → 5, using `int(x + 0.5)`, since `round()` rounds to even).
+    - The seed: a new `_create_reviews` step with its own RNG, a fixed
+      comment pool, Casey's two-line DreamWeaver review, and one
+      staff-edited review. The summary line counts reviews.
+    - A `make_order` builder in `conftest.py`, the same shape as
+      `make_coupon`.
+  - **Tests:** 43 in `reviews/tests.py`, plus the `public_name` test in
+    `accounts/tests.py` and `Review` in the seed idempotency test. Full
+    suite green at 517 passed before the seed fix. The reviews and seed
+    tests were re-run after it (93 passed). Ruff clean. All 15 Phase 1
+    criteria are ticked in `plans/reviews.md`.
+  - **Manual check:** the user followed the browser steps and confirmed
+    the phase after the seed fix.
+- **Deviations:**
+  - **The button idea was dropped:** the user asked for a "Leave Your
+    Review" button beside every message. That changes the PRD, so I
+    asked three questions about it (when the form arrives, what a click
+    does, what visitors see). The user rejected the prompt and kept the
+    PRD's always-open form with no button.
+  - **MindSync and SyncRest:** the user expected to be able to review
+    them already. I explained that the placeholder is where Phase 2's
+    form goes, and the phase boundary was kept.
+  - **My choices, flagged to the user:**
+    - `updated_at` is set from `created_at` in `save()`, not by
+      `auto_now`, so the seed can backdate and a new review doesn't read
+      as edited. Admin edits don't bump it.
+    - The placeholder copy is "Reviewing opens soon."
+    - The `btn-primary` test checks only the reviews section for
+      visitors, because the navbar's Sign up is primary already.
+- **Sideways:**
+  - **Timestamp bug caught before testing:** both timestamps first
+    defaulted to separate `timezone.now` calls. Every new review would
+    have shown "Edited". I fixed it in `save()` and regenerated the
+    uncommitted migration.
+  - **Clumsy first summary test:** my first draft deleted the other
+    product's review before asserting, which threw away the check it
+    existed for. I caught it before running it and used a third product
+    instead.
+  - **Three test-assertion mistakes:** an apostrophe expected escaped in
+    literal template text (twice), and a visitor `btn-primary` count
+    that included the pre-existing navbar button.
+  - **DreamWeaver had no other reviews:** found by the user in the
+    browser. A throwaway-database script in the scratchpad showed that
+    `dcole` and `snakamura` had received DreamWeaver, but the 3-in-5
+    chance skipped both. The seed now always reviews delivered lines for
+    the products Casey ordered (51 reviews, up from 44). The seed test
+    checks each of those pages has other people's reviews. The tests
+    missed this because they checked the rule, not the demo.
+  - **Shell use:** a PowerShell match count and a `sed` to tick the plan
+    ran without objection. `PROMPTS.md` was read and edited only with the
+    file tools.
+
+## 2026-10-18 — Customer reviews: broke the PRD into a four-phase plan
+
+### Prompts
+
+1. `/prd-to-plan @prd/reviews.md`
+2. (Declined the two-question prompt on granularity and the back-office
+   URL, choosing to clarify first) "1"
+3. (Granularity, after the trade-offs were explained) "b, merge 3 and 4"
+4. (Back-office URL) "a"
+5. "Update PROMPTS.md with the standard prompt."
+
+### Summary
+
+- **Outcome:**
+  - **Exploration:** before slicing, I read the integration points the PRD
+    names:
+    - `plans/wishlist.md` as the format model
+    - `docs/ARCHITECTURE.md`, `docs/FRONTEND.md`, and `docs/TESTING.md`
+    - `config/urls.py` and every app's URL patterns, including the Orders
+      back-office paths
+    - the back-office tab rail in `templates/backoffice/base.html`
+    - `ProductDetailView`'s context
+    - the seed's demo orders for DreamWeaver, MindSync, and SyncRest
+  - **First breakdown (five phases):**
+    - a read-only section plus seed
+    - writing a review
+    - editing and deleting your own review
+    - staff moderation on the product page
+    - the back-office Reviews tab
+  - **Final breakdown (four phases):**
+    - **Phase 1, read-only section and seeded reviews** (stories 1, 2, 11,
+      12, 15–17, 20, 22, 28–30): the app, the model and its constraints,
+      eligibility states, the summary, `public_name`, the admin, every
+      pinned-slot message, the review cards, and the seed step.
+    - **Phase 2, writing a review** (stories 3–7, 13, 19): the model form,
+      the DaisyUI star widget, and the create endpoint with
+      duplicate-safe create and a 403 for ineligible users.
+    - **Phase 3, editing and deleting, for authors and staff** (stories
+      8–10, 14, 17, 18, 21, 23): `revise`, the permission method and
+      queryset, the edit, cancel, save, and delete endpoints, the 404 for
+      someone else's review, and the "no longer exists" re-render.
+    - **Phase 4, back-office Reviews tab** (stories 24–27): the staff list,
+      the `?rating=` filter, HTMX delete, and both empty states.
+  - **Plan:** written to `plans/reviews.md`, with architectural decisions,
+    a description per phase, and acceptance criteria.
+  - **Still to do:** nothing is committed, and no code has changed.
+- **Deviations:**
+  - **Clarified before answering:** the user declined the two-question
+    prompt to ask about granularity first. I explained:
+    - why staff moderation was thin (mostly one branch in the permission
+      method)
+    - why seeding sat in Phase 1 (otherwise the section is demoable only
+      through tests)
+  - **Granularity:** I recommended merging phases 3 and 4 so the
+    permission method is written once. The user agreed.
+  - **Back-office URL departs from the PRD:** the PRD says the app is
+    "mounted under `/reviews/`". I recommended mounting it at the root,
+    like `orders` and `coupons`, so the tab sits at `/backoffice/reviews/`
+    with the other tabs. Customer endpoints keep a `reviews/` prefix. The
+    user agreed, and the plan records the departure.
+  - **My choices, not the PRD's, flagged to the user:**
+    - the exact endpoint paths (edit GET and save POST share
+      `reviews/<pk>/edit/`; cancel is `reviews/<pk>/card/`)
+    - a placeholder in the *can review* slot until Phase 2
+    - an invalid `?rating=` value falls back to all reviews
+- **Sideways:**
+  - **An assumption, not verified:** I said the invalid-`?rating=`
+    fallback matches how the Orders filter treats a bad `?status=`, but I
+    didn't read the Orders list view to confirm it. Check this when
+    building Phase 4.
+  - **No shell commands this session:** `PROMPTS.md` was read and edited
+    with the file tools from the start.
+
+## 2026-10-18 — Customer reviews: grilled the design and wrote the PRD
+
+### Prompts
+
+1. `/grill-me` with: "We need to add customer reviews to the ThoughtTronix
+   store. The feature must include the following requirements: A customer
+   can leave one review per product, and only for products they have
+   purchased. SoulSear owners are eligible. Their next of kin are not. Each
+   review will have a star-based rating (1-5) and a written comment.
+   Customers can only edit or delete their own reviews, but staff and
+   admins can edit or delete any review. Creating, editing, or deleting a
+   review should update smoothly without reloading the full page or
+   causing the customer to lose their place."
+2. (Q1, what "next of kin are not" means) "Option 1, agreed"
+3. (Q2, which order statuses count as purchased) "2"
+4. (Q3, a review whose author later loses eligibility) "Option 1"
+5. (Q4, which app) "Option 1"
+6. (Q5, reviewing unavailable products) "Option 1"
+7. (Q6, rating and comment validation) "2"
+8. (Q7, where reviews appear and the summary) "Option 1"
+9. (Q8, list order and pagination) "1"
+10. (Q9, what each HTMX request swaps) "Option 1"
+11. (Q10, where staff moderate) "2"
+12. (Q11, what the back-office Reviews tab does) "Option 1"
+13. (Q12, showing edits and staff edits) "Option 1"
+14. (Q13, what non-eligible viewers see) "Option 1"
+15. (Q14, a duplicate create) "Go with your recommendation"
+16. (Q15, an HTMX action on a review that no longer exists) "Go with your
+    recommendation"
+17. (Q16, the reviewer's public name) "Your recommendation"
+18. (Q17, the star picker) "1"
+19. (Q18, seed data) "Option 1"
+20. `/to-prd`
+21. "Update PROMPTS.md with the standard prompt."
+22. (Rejected a shell command) "What are my other options?"
+23. "Option 1"
+
+### Summary
+
+- **Outcome:**
+  - **Design interview (18 questions).** Before asking anything, the
+    codebase was read: `Order`/`OrderItem` and the four order statuses,
+    roles in `docs/ARCHITECTURE.md`, `StaffRequiredMixin`, the HTMX and
+    template rules in `docs/FRONTEND.md`, `ProductDetailView` and its
+    template, the wishlist PRD as the pattern to follow, and the seed's
+    SoulSear products and demo orders. "Next of kin" exists nowhere in the
+    code. Settled:
+    - **Eligibility:** a Delivered order containing the product, checked
+      once at creation. It belongs to the buying account (the SoulSear
+      rule; no kin model). Availability is ignored, staff get no
+      exemption, and later status changes never touch a review.
+    - **Model:** a new `reviews` app. `Review` has a 1–5 rating (with a
+      check constraint), a required comment of up to 2,000 characters,
+      `created_at`, `updated_at`, and `edited_by_staff`, plus a unique
+      user–product constraint. Logic lives in the manager (an eligibility
+      state, an idempotent create) and the model (`revise`, a permission
+      check). `User.public_name` shows "Casey M."
+    - **Detail page:** one reviews-section partial with a summary, a slot
+      pinned at the top (form, own review, or a message for the viewer's
+      state), and the others newest first by creation, with no
+      pagination. Create, save, and delete re-render the section; edit and
+      cancel swap one card; delete uses `hx-confirm`. DaisyUI star radios.
+      "Verified purchase", "Edited", and "Edited by staff" labels.
+    - **Edge cases:** a duplicate create is a no-op that shows the
+      existing review. Another user's review 404s. A review that's gone
+      re-renders the section.
+    - **Staff:** inline Edit and Delete on every review, plus a back-office
+      Reviews tab for all staff with a `?rating=` filter and HTMX delete;
+      no back-office edit screen.
+    - **Seed:** reviews only from delivered order lines. Casey reviews
+      DreamWeaver; one review is staff-edited. No SoulSear order (it would
+      flatten the revenue chart); the SoulSear rule is proven in tests.
+  - **PRD:** written to `prd/reviews.md` with 30 user stories.
+  - **Still to do:** nothing is committed, and no code has changed.
+- **Deviations:**
+  - **Q2 overridden:** I recommended any non-cancelled order. The user
+    chose delivered orders only, which made Q3 a real question and created
+    the "awaiting delivery" state in Q13.
+  - **Q6 overridden:** I recommended a 10-character minimum on comments.
+    The user chose any non-blank comment up to 2,000 characters.
+  - **Q10 overridden:** I recommended inline staff moderation only. The
+    user added a back-office Reviews tab, which created Q11.
+  - **Every other answer took the recommendation.**
+  - **Defaults set without asking, and stated in the interview:** reviews
+    cascade on product and user deletion, server-side permission checks,
+    no `django.contrib.messages` for review actions, Django admin
+    registration, all staff (not a permission subset) moderate.
+  - **Filled in by `/to-prd`, flagged to the user:** an ineligible create
+    POST gets a 403; an invalid edit re-renders only the card's form; the
+    SoulSear test gives the "next of kin" the buyer's address; seeded
+    comments come from a fixed pool of in-world text.
+- **Sideways:**
+  - **Q3 was found in the code:** `OrderStatusForm` allows any status at
+    any time, so a delivered order can be moved back. That made "what
+    happens to an existing review" concrete rather than hypothetical.
+  - **Q15's recommendation was refined as I gave it:** I recommended
+    Option 1 "but simplified" (delete is simply idempotent; only edit and
+    save show the "no longer exists" note), not Option 1 exactly.
+  - **Shell command rejected again:** to start this entry I ran a
+    PowerShell command to count lines and print the end of `PROMPTS.md`,
+    when the file tools would have done. The user rejected it and asked
+    for other options, then chose reading and editing with the file
+    tools. This is the third session in a row where this happened.
+
 ## 2026-10-18 — Wishlist Phase 2: the Wishlist page, three behaviors built test-first
 
 ### Prompts

@@ -1,5 +1,6 @@
 from http import HTTPStatus
 
+import pytest
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
@@ -110,3 +111,20 @@ def test_navbar_greets_signed_in_customer(client, customer):
     assert "Hi, customer" in page
     assert "Sign out" in page
     assert reverse("accounts:signup") not in page
+
+
+# --- Public name ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("first", "last", "expected"),
+    [
+        ("Casey", "Monroe", "Casey M."),
+        ("Casey", "", "Casey"),
+        ("", "Monroe", "customer"),
+    ],
+)
+def test_public_name_is_first_name_and_last_initial(customer, first, last, expected):
+    customer.first_name, customer.last_name = first, last
+
+    assert customer.public_name() == expected

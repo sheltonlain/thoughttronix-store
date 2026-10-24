@@ -1,0 +1,19 @@
+{% load review_extras %}
+{# One review. Include with review=<Review>. The comment is auto-escaped; #}
+{# linebreaksbr keeps the author's line breaks. #}
+<article id="review-{{ review.pk }}" class="review-card rounded-box bg-base-200 p-4">
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+    {% stars review.rating %}
+    <span class="font-semibold">{{ review.user.public_name }}</span>
+    <span class="text-sm opacity-70">{{ review.created_at|date:"M j, Y" }}</span>
+  </div>
+  <div class="mt-2 flex flex-wrap gap-2">
+    <span class="badge badge-success badge-outline badge-sm">✓ Verified purchase</span>
+    {% if review.edited_by_staff %}
+      <span class="badge badge-ghost badge-sm">Edited by staff</span>
+    {% elif review.is_edited %}
+      <span class="badge badge-ghost badge-sm">Edited</span>
+    {% endif %}
+  </div>
+  <p class="mt-3">{{ review.comment|linebreaksbr }}</p>
+</article>

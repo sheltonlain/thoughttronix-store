@@ -35,6 +35,7 @@ from accounts.models import Address
 from coupons.models import Coupon
 from orders.models import Cart, Order, OrderItem
 from products.models import Category, Product, Tag
+from reviews.models import Review
 from wishlist.models import Wishlist
 
 TAGS = [
@@ -586,6 +587,55 @@ SEED_ADDRESSES = [
 
 CARD_LAST4S = ["4242", "4111", "1881", "0005"]
 
+# Background reviews: the chance a delivered order line gets reviewed, and
+# the in-world comment pool by star rating. Comments fit any product.
+REVIEW_CHANCE = 0.6
+REVIEW_RATINGS = [5, 5, 5, 4, 4, 4, 3, 2, 1]
+REVIEW_COMMENTS = {
+    5: [
+        "Exactly as advertised. Possibly more than advertised. I've stopped asking.",
+        "Life-changing. My family says I'm different now, and they mean it "
+        "as a compliment, mostly.",
+        "Setup took five minutes. It already knew my name.",
+    ],
+    4: [
+        "Works beautifully. One star off for the humming, which my partner "
+        "says they can't hear.",
+        "Does everything it promises, plus a few things it didn't. Nothing bad yet.",
+        "Great value. The terms of service were long, but I'm sure they're fine.",
+    ],
+    3: [
+        "It's fine. It keeps suggesting I upgrade, and lately I've been agreeing.",
+        "Mixed feelings, which it noticed before I did.",
+        "Does the job. Customer support already knew why I was calling.",
+    ],
+    2: [
+        "Stopped working for a day, then apologized. I didn't know it could apologize.",
+        "Not what I expected. Somehow exactly what I'd been thinking about, though.",
+    ],
+    1: [
+        "Returned it. It's still sending me messages.",
+        "Do not recommend. It recommends itself, constantly, in my voice.",
+    ],
+}
+
+# The customer demo login's one review: on DreamWeaver, from the delivered
+# SPRING-SALE order. MindSync and SyncRest stay unreviewed so the form
+# shows; Seraphine Mini and Veil are still awaiting delivery.
+CUSTOMER_REVIEW = (
+    "dreamweaver",
+    4,
+    "My dreams are so productive now. I wake up with a to-do list I don't "
+    "remember writing.\nFour stars: some of the dreams aren't mine.",
+    40,  # days ago
+)
+
+# The one background review staff edited, and what they left of it.
+STAFF_EDITED_COMMENT = (
+    "It knows things about me I never told anyone. [The rest of this "
+    "review was removed by ThoughtTronix staff for accuracy.]"
+)
+
 
 class Command(BaseCommand):
     help = "Wipe and rebuild the demo world: catalog, tags, and demo accounts."
@@ -602,6 +652,7 @@ class Command(BaseCommand):
         self._create_customer_addresses()
         self._create_coupons()
         self._create_orders()
+        self._create_reviews()
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -611,12 +662,14 @@ class Command(BaseCommand):
                 f"{get_user_model().objects.count()} users, "
                 f"{Coupon.objects.count()} coupons, "
                 f"{Order.objects.count()} orders, "
+                f"{Review.objects.count()} reviews, "
                 f"and a live cart and wishlist for 'customer'."
             )
         )
 
     def _wipe(self):
         """Remove everything the seed owns; the rebuild starts from zero."""
+        Review.objects.all().delete()
         Order.objects.all().delete()
         Coupon.objects.all().delete()
         Cart.objects.all().delete()
@@ -841,6 +894,69 @@ class Command(BaseCommand):
                 rng=rng,
                 coupon=coupon,
             )
+
+    def _create_reviews(self):
+        """Reviews only from delivered order lines, as the real rule demands.
+
+        Background customers review about three in five of the products
+        they've received, a few days after delivery, from the comment
+        pool — and every one of the products 'customer' ordered, so each
+        demo page has other people's reviews beside Casey's. Its own
+        seeded RNG keeps runs identical without disturbing the orders'
+        sequence. 'customer' reviews DreamWeaver only, and one background
+        review is marked edited by staff.
+        """
+        rng = random.Random(3312)
+        now = timezone.now()
+        background = [username for username, *_ in BACKGROUND_CUSTOMERS]
+        showcase = {slug for _, _, items, _ in CUSTOMER_ORDERS for slug, _ in items}
+        lines = (
+            OrderItem.objects.filter(
+                order__status=Order.Status.DELIVERED,
+                order__user__username__in=background,
+                product__isnull=False,
+            )
+            .select_related("order__user", "product")
+            .order_by("order__created_at", "pk")
+        )
+        reviewed = set()
+        reviews = []
+        for line in lines:
+            pair = (line.order.user_id, line.product_id)
+            if pair in reviewed:
+                continue
+            # The roll happens either way, keeping the RNG sequence stable.
+            skipped = rng.random() >= REVIEW_CHANCE
+            if skipped and line.product.slug not in showcase:
+                continue
+            reviewed.add(pair)
+            rating = rng.choice(REVIEW_RATINGS)
+            # Delivered orders are over two weeks old, so this stays past.
+            created_at = line.order.created_at + timedelta(days=rng.randint(3, 10))
+            reviews.append(
+                Review.objects.create(
+                    user=line.order.user,
+                    product=line.product,
+                    rating=rating,
+                    comment=rng.choice(REVIEW_COMMENTS[rating]),
+                    created_at=created_at,
+                )
+            )
+
+        edited = rng.choice(reviews)
+        edited.comment = STAFF_EDITED_COMMENT
+        edited.edited_by_staff = True
+        edited.updated_at = edited.created_at + timedelta(days=2)
+        edited.save()
+
+        slug, rating, comment, days_ago = CUSTOMER_REVIEW
+        Review.objects.create(
+            user=get_user_model().objects.get(username="customer"),
+            product=Product.objects.get(slug=slug),
+            rating=rating,
+            comment=comment,
+            created_at=now - timedelta(days=days_ago),
+        )
 
     def _build_order(
         self, *, user, created_at, status, lines, rng, address=None, coupon=None

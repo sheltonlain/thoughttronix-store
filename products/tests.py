@@ -10,6 +10,7 @@ from django.utils.html import escape
 
 from accounts.models import Address
 from orders.models import CartItem, Order, OrderItem
+from reviews.models import Review
 from wishlist.models import WishlistItem
 
 from .models import Category, Product, Tag
@@ -282,6 +283,7 @@ def test_seed_is_idempotent(db):
         Order.objects.count(),
         OrderItem.objects.count(),
         Address.objects.count(),
+        Review.objects.count(),
     )
 
     call_command("seed")
@@ -295,6 +297,7 @@ def test_seed_is_idempotent(db):
         Order.objects.count(),
         OrderItem.objects.count(),
         Address.objects.count(),
+        Review.objects.count(),
     )
 
     assert first == second

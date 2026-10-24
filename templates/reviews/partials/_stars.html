@@ -1,0 +1,8 @@
+{# Read-only DaisyUI stars, rendered by the {% stars %} tag. aria-current #}
+{# marks the last filled star; the wrapper speaks for the whole row. #}
+<div class="rating rating-{{ size }} pointer-events-none" role="img"
+     aria-label="{{ filled }} out of 5 stars">
+  {% for position in positions %}
+    <div class="mask mask-star-2 bg-warning" aria-hidden="true"{% if position == filled %} aria-current="true"{% endif %}></div>
+  {% endfor %}
+</div>

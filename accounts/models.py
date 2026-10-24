@@ -60,6 +60,18 @@ class User(AbstractUser):
             ),
         ]
 
+    def public_name(self):
+        """The name shown beside the user's public content, like reviews.
+
+        First name and last initial ("Casey M."), never the full name.
+        Falls back to the username when there's no first name.
+        """
+        if not self.first_name:
+            return self.username
+        if not self.last_name:
+            return self.first_name
+        return f"{self.first_name} {self.last_name[0]}."
+
     def set_default_address(self, kind, address):
         """Make ``address`` the default for ``kind`` ("shipping" or "billing")."""
         field = f"default_{kind}_address"
