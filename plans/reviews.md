@@ -211,7 +211,7 @@ view. The thin create view handles each outcome:
 - [x] The star widget renders five labelled radios with none checked
       (tested).
 - [x] Add to cart remains the detail page's only `btn-primary`.
-- [ ] As the seeded `customer`, MindSync's form submits in place without a
+- [x] As the seeded `customer`, MindSync's form submits in place without a
       page reload.
 
 ---

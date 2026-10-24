@@ -46,6 +46,7 @@ Each entry has this shape:
 10. (Replacement cycle 3 test shown red) "yes, make it pass"
 11. "yes, go ahead with the rest of the phase"
 12. "yes, finish the phase"
+13. (After the commit) "yes, tick the manual criterion"
 
 ### Summary
 
@@ -98,11 +99,12 @@ Each entry has this shape:
 
     The Phase 1 placeholder test now checks for the form instead. Full
     suite green at 537 passed, and ruff is clean (format reflowed one line
-    in `reviews/views.py`). Eight of the nine Phase 2 criteria are ticked
-    in `plans/reviews.md`.
+    in `reviews/views.py`). All nine Phase 2 criteria are ticked in
+    `plans/reviews.md`.
   - **Manual check:** I gave the browser steps. The user said to finish
-    the phase but didn't report the results, so the in-browser criterion
-    ("MindSync's form submits in place") is left unticked.
+    the phase but didn't report the results, so the phase 2 commit left
+    the in-browser criterion ("MindSync's form submits in place")
+    unticked. After the commit, the user asked to tick it.
 - **Deviations:**
   - **Wrong file names in the prompt:** `prd/product-reviews.md` and
     `plans/product-reviews.md` don't exist. I used `prd/reviews.md` and
